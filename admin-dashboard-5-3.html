@@ -442,6 +442,22 @@ input[type=file]{background:var(--bg4);border:1px solid var(--border);border-rad
       </div>
 
       <div class="card" style="padding:13px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">📈 MetaAPI (MT5)</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6">เชื่อมต่อ MT5 หลาย account ผ่าน MetaAPI · สมัครฟรีที่ <span style="color:var(--gold)">metaapi.cloud</span></div>
+        <div class="field"><label>MetaAPI Token</label>
+          <input type="password" id="metaapiToken" placeholder="ใส่ Token จาก metaapi.cloud" style="font-family:'Space Mono',monospace">
+        </div>
+        <div style="font-size:11px;font-weight:600;margin:8px 0 6px;color:var(--gold)">MT5 Accounts</div>
+        <div id="metaAccountList" style="margin-bottom:8px"></div>
+        <button class="btn-outline" onclick="addMetaAccount()" style="width:100%;margin-bottom:8px">➕ เพิ่ม MT5 Account</button>
+        <div style="display:flex;gap:7px">
+          <button class="btn-gold" style="flex:1" onclick="saveMetaAPI()">💾 บันทึก</button>
+          <button class="btn-outline" style="flex:1" onclick="syncMetaAPI()">🔄 ซิงค์</button>
+        </div>
+        <div id="metaApiStatus" style="font-size:10px;text-align:center;margin-top:6px;color:var(--muted)"></div>
+      </div>
+
+      <div class="card" style="padding:13px;margin-bottom:10px">
         <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">🖥️ VPS Server</div>
         <div class="field"><label>IP Address</label>
           <input type="text" id="vpsIpInput" placeholder="123.45.67.89" style="font-family:'Space Mono',monospace">
@@ -1645,11 +1661,91 @@ function saveStrategy(){
   const goal = document.getElementById('strategyGoal').value.trim();
   const s = { main, rules, goal, updatedAt: Date.now() };
   localStorage.setItem(STRATEGY_KEY, JSON.stringify(s));
+  // บันทึกลง Firebase key เดียวกับที่ Dashboard ดึง
+  // Dashboard ดึงจาก localStorage key: xauusd_strategy
+  localStorage.setItem('xauusd_strategy', JSON.stringify(s));
   // Sync ขึ้น Firebase
   if(window.fbSyncStrategy) window.fbSyncStrategy(s);
   const statusEl = document.getElementById('strategyStatus');
   if(statusEl) statusEl.textContent = '✅ บันทึกแล้ว · '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   showToast('💾 บันทึกกลยุทธ์แล้ว');
+}
+
+// ===== METAAPI =====
+const META_KEY = 'xauusd_metaapi';
+
+function loadMetaAPISettings(){
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  const el = document.getElementById('metaapiToken');
+  if(el && s.token) el.value = s.token;
+  renderMetaAccountList();
+}
+
+function renderMetaAccountList(){
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  const accounts = s.accounts||[];
+  const el = document.getElementById('metaAccountList');
+  if(!el) return;
+  el.innerHTML = !accounts.length ?
+    '<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">ยังไม่มี MT5 Account</div>' :
+    accounts.map((a,i) =>
+      '<div style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">'+
+      '<div><div style="font-size:12px;font-weight:600">'+a.name+'</div>'+
+      '<div style="font-size:9px;color:var(--muted)">ID: '+a.accountId+'</div></div>'+
+      '<div style="display:flex;gap:5px;align-items:center">'+
+      '<div style="width:7px;height:7px;border-radius:50%;background:'+(a.connected?'var(--green)':'var(--muted)')+'"></div>'+
+      '<button onclick="removeMetaAccount('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">🗑</button></div></div>'
+    ).join('');
+}
+
+function addMetaAccount(){
+  const name = prompt('ชื่อ Account:'); if(!name) return;
+  const accountId = prompt('MetaAPI Account ID:'); if(!accountId) return;
+  const memberId = prompt('Member Account# ในระบบ:');
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  if(!s.accounts) s.accounts=[];
+  s.accounts.push({name, accountId, memberId:memberId||'', connected:false});
+  localStorage.setItem(META_KEY, JSON.stringify(s));
+  renderMetaAccountList();
+  showToast('✅ เพิ่ม Account แล้ว');
+}
+
+function removeMetaAccount(i){
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  s.accounts.splice(i,1);
+  localStorage.setItem(META_KEY, JSON.stringify(s));
+  renderMetaAccountList();
+}
+
+function saveMetaAPI(){
+  const token = document.getElementById('metaapiToken').value.trim();
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  s.token = token;
+  localStorage.setItem(META_KEY, JSON.stringify(s));
+  showToast('💾 บันทึก MetaAPI แล้ว');
+}
+
+async function syncMetaAPI(){
+  const s = JSON.parse(localStorage.getItem(META_KEY)||'{}');
+  if(!s.token){ showToast('⚠️ ใส่ Token ก่อน'); return; }
+  if(!s.accounts?.length){ showToast('⚠️ เพิ่ม Account ก่อน'); return; }
+  const statusEl = document.getElementById('metaApiStatus');
+  if(statusEl) statusEl.textContent = '🔄 กำลังซิงค์...';
+  let success = 0;
+  for(const acc of s.accounts){
+    try{
+      const res = await fetch('https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/'+acc.accountId+'/account-information',
+        {headers:{'auth-token':s.token}});
+      const data = await res.json();
+      if(data.balance !== undefined){
+        if(window.fbSyncMT5) await window.fbSyncMT5(acc, data);
+        acc.connected = true; success++;
+      }
+    }catch(e){ acc.connected = false; }
+  }
+  localStorage.setItem(META_KEY, JSON.stringify(s));
+  renderMetaAccountList();
+  if(statusEl) statusEl.textContent = success+'/'+s.accounts.length+' connected · '+new Date().toLocaleTimeString('th-TH');
 }
 
 </script>
