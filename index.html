@@ -6,6 +6,7 @@
   <title>PuppyPocket — กระเป๋าครอบครัว</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- WalletConnect AppKit (Reown) — ไม่ต้อง bundler -->
   <script type="module">
     import { createAppKit } from 'https://esm.run/@reown/appkit@1.6.8';
@@ -865,6 +866,9 @@
         <div style="width:100px;height:100px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:900;color:white;font-family:'Nunito',sans-serif" id="receive-av"></div>
         <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px" id="receive-name"></div>
         <div style="font-size:.78rem;color:var(--fg-m);margin-bottom:20px">ให้สมาชิกคนอื่นเลือกชื่อคุณจากหน้าส่งเงิน</div>
+        <div id="receive-qr-wrap" style="display:none;background:#fff;border-radius:14px;padding:16px;margin-bottom:16px;width:fit-content;margin-left:auto;margin-right:auto">
+          <div id="receive-qr"></div>
+        </div>
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">
           <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:6px">รหัสสมาชิก</div>
           <div style="font-family:monospace;font-size:1.1rem;font-weight:700;letter-spacing:.1em;color:var(--purple-light)" id="receive-id"></div>
@@ -2506,17 +2510,33 @@ function closeAddOutside(e){if(e.target===e.currentTarget)document.getElementByI
 // ============================================================
 // รับเงิน
 // ============================================================
+// สร้าง/อัปเดต QR code ในหน้ารับเงิน (ใช้ format เดียวกับที่ตัวสแกนเราเองอ่านได้)
+function _renderReceiveQR(address) {
+  var wrap = document.getElementById('receive-qr-wrap');
+  var box = document.getElementById('receive-qr');
+  if (!address || typeof QRCode === 'undefined') { if (wrap) wrap.style.display = 'none'; return; }
+  box.innerHTML = ''; // เคลียร์ QR เก่าก่อนสร้างใหม่ (qrcodejs จะ append ซ้ำถ้าไม่เคลียร์)
+  var chain = getCurrentChain();
+  var decimalChainId = parseInt(chain.id, 16);
+  var qrContent = 'ethereum:' + address + '@' + decimalChainId;
+  new QRCode(box, { text: qrContent, width: 176, height: 176, colorDark: '#1a1a2e', colorLight: '#ffffff' });
+  wrap.style.display = 'block';
+}
+
 function openReceive(){
   var m=getCurrentMember();if(!m)return;
   var av=document.getElementById('receive-av');av.style.width='100px';av.style.height='100px';av.style.borderRadius='50%';setAvatarEl(av,m);
   document.getElementById('receive-name').textContent=m.name;
   if(m.walletAddress){
     document.getElementById('receive-id').textContent=m.walletAddress;
+    _renderReceiveQR(m.walletAddress);
     document.getElementById('modal-receive').classList.add('open');
   } else {
     requireWallet('รับเงิน', function(){
       var updated=getCurrentMember();
-      document.getElementById('receive-id').textContent=updated&&updated.walletAddress?updated.walletAddress:'ยังไม่มี wallet address';
+      var addr = updated&&updated.walletAddress?updated.walletAddress:null;
+      document.getElementById('receive-id').textContent=addr||'ยังไม่มี wallet address';
+      _renderReceiveQR(addr);
       document.getElementById('modal-receive').classList.add('open');
     });
   }
