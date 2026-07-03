@@ -871,7 +871,8 @@
         </div>
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">
           <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:6px">รหัสสมาชิก</div>
-          <div style="font-family:monospace;font-size:1.1rem;font-weight:700;letter-spacing:.1em;color:var(--purple-light)" id="receive-id"></div>
+          <div style="font-family:monospace;font-size:.95rem;font-weight:700;letter-spacing:.02em;color:var(--purple-light);word-break:break-all;line-height:1.5;margin-bottom:10px" id="receive-id"></div>
+          <button class="w-btn" id="receive-copy-btn" onclick="copyReceiveAddress()" style="margin:0;padding:8px;font-size:.72rem;background:rgba(139,95,207,.15);color:var(--purple-light)">📋 คัดลอกที่อยู่</button>
         </div>
         <div style="font-size:.75rem;color:var(--fg-m);line-height:1.6">
           <span style="color:var(--purple-light);margin-right:4px">ℹ️</span>
@@ -2510,6 +2511,34 @@ function closeAddOutside(e){if(e.target===e.currentTarget)document.getElementByI
 // ============================================================
 // รับเงิน
 // ============================================================
+// คัดลอกที่อยู่กระเป๋าในหน้ารับเงิน พร้อม fallback เผื่อ Clipboard API ใช้ไม่ได้ (เช่นใน in-app browser บางตัว)
+function copyReceiveAddress() {
+  var text = document.getElementById('receive-id').textContent;
+  if (!text) return;
+  var btn = document.getElementById('receive-copy-btn');
+  function showCopied() {
+    if (!btn) return;
+    var original = btn.innerHTML;
+    btn.innerHTML = '✓ คัดลอกแล้ว';
+    setTimeout(function () { btn.innerHTML = original; }, 1500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(showCopied).catch(function () { _fallbackCopy(text, showCopied); });
+  } else {
+    _fallbackCopy(text, showCopied);
+  }
+}
+function _fallbackCopy(text, onDone) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); onDone(); }
+  catch (e) { toast('error', 'คัดลอกไม่สำเร็จ กรุณากดค้างเพื่อคัดลอกเอง'); }
+  document.body.removeChild(ta);
+}
+
 // สร้าง/อัปเดต QR code ในหน้ารับเงิน (ใช้ format เดียวกับที่ตัวสแกนเราเองอ่านได้)
 function _renderReceiveQR(address) {
   var wrap = document.getElementById('receive-qr-wrap');
