@@ -810,8 +810,9 @@
         </div>
       </div>
       <div id="oc-warning" style="display:none;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:10px 12px;font-size:.68rem;color:var(--red);margin-bottom:12px;line-height:1.5"></div>
+      <div id="oc-tx-status" style="display:none;text-align:center;font-size:.72rem;color:var(--fg-m);margin-bottom:12px">⏳ <span id="oc-tx-status-text"></span></div>
       <div style="display:flex;gap:8px">
-        <button class="w-btn" style="flex:1;background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin:0" onclick="closeOnchainConfirm()">ยกเลิก</button>
+        <button class="w-btn" id="oc-cancel-btn" style="flex:1;background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin:0" onclick="closeOnchainConfirm()">ยกเลิก</button>
         <button class="w-btn" id="oc-confirm-btn" style="flex:1.4;margin:0" onclick="proceedOnchainTransfer()">✓ ยืนยันใน Bitget</button>
       </div>
     </div>
@@ -1251,7 +1252,7 @@ async function doConnectWithProvider(raw) {
     toast('success', 'เชื่อมต่อ Bitget Wallet สำเร็จ! 🎉');
   } catch (err) {
     if (err && err.code === 4001) toast('error', 'คุณยกเลิกการเชื่อมต่อ');
-    else toast('error', 'เชื่อมต่อไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+    else toast('error', 'เชื่อมต่อไม่สำเร็จ: ' + friendlyError(err));
     throw err; // re-throw ให้ lazyConnectWallet จัดการ finally ได้ถูก
   }
 }
@@ -1429,32 +1430,33 @@ function openOnchainConfirm(toId, toAddress, amount, note, slip, cat) {
   document.getElementById('oc-to-name').textContent = toMember.name;
   document.getElementById('oc-to-addr').textContent = shortenAddr(toAddress);
   document.getElementById('oc-amount').textContent = amount.toFixed(2) + ' USDC (≈฿' + (amount*USDC_TO_THB).toLocaleString('th-TH',{maximumFractionDigits:0}) + ')';
-  document.getElementById('oc-gas-status').textContent = '⏳ กำลังตรวจสอบ MATIC...';
+  document.getElementById('oc-gas-status').textContent = '⏳ กำลังตรวจสอบ ' + getCurrentChain().gasSymbol + '...';
   document.getElementById('oc-warning').style.display = 'none';
   var btn = document.getElementById('oc-confirm-btn');
   btn.disabled = false; btn.textContent = '✓ ยืนยันใน Bitget';
 
   document.getElementById('modal-onchain-confirm').classList.add('open');
 
-  // เช็คยอด MATIC แบบ async ไม่บล็อก UI
+  // เช็คยอดเหรียญ gas ของเชนที่ใช้อยู่ แบบ async ไม่บล็อก UI
   getMaticBalance(connectedWalletAddress).then(function(matic){
     var gasStatusEl = document.getElementById('oc-gas-status');
     var warnEl = document.getElementById('oc-warning');
+    var gasSymbol = getCurrentChain().gasSymbol; // MATIC / BNB / ETH ตามเชนที่เลือกอยู่
     if (matic === null) {
       gasStatusEl.textContent = '⚠️ ตรวจสอบไม่ได้';
       return;
     }
     if (matic <= 0) {
-      gasStatusEl.innerHTML = '<span style="color:var(--red)">0 MATIC ⚠️</span>';
+      gasStatusEl.innerHTML = '<span style="color:var(--red)">0 ' + gasSymbol + ' ⚠️</span>';
       warnEl.style.display = 'block';
-      warnEl.textContent = '⚠️ กระเป๋านี้ไม่มี MATIC เลย — จะไม่สามารถจ่ายค่า gas ได้ ธุรกรรมจะล้มเหลว กรุณาเติม MATIC เข้ากระเป๋าก่อนโอน';
+      warnEl.textContent = '⚠️ กระเป๋านี้ไม่มี ' + gasSymbol + ' เลย — จะไม่สามารถจ่ายค่า gas ได้ ธุรกรรมจะล้มเหลว กรุณาเติม ' + gasSymbol + ' เข้ากระเป๋าก่อนโอน';
       btn.disabled = true;
     } else if (matic < 0.01) {
-      gasStatusEl.innerHTML = '<span style="color:var(--yellow)">' + matic.toFixed(4) + ' MATIC (น้อย)</span>';
+      gasStatusEl.innerHTML = '<span style="color:var(--yellow)">' + matic.toFixed(4) + ' ' + gasSymbol + ' (น้อย)</span>';
       warnEl.style.display = 'block';
-      warnEl.textContent = '⚠️ MATIC เหลือน้อยมาก (' + matic.toFixed(4) + ') อาจไม่พอจ่ายค่า gas ถ้าธุรกรรมแพง ลองส่งดูได้แต่เผื่อใจไว้ว่าอาจ fail';
+      warnEl.textContent = '⚠️ ' + gasSymbol + ' เหลือน้อยมาก (' + matic.toFixed(4) + ') อาจไม่พอจ่ายค่า gas ถ้าธุรกรรมแพง ลองส่งดูได้แต่เผื่อใจไว้ว่าอาจ fail';
     } else {
-      gasStatusEl.innerHTML = '<span style="color:var(--green)">' + matic.toFixed(4) + ' MATIC ✓ พอจ่าย gas</span>';
+      gasStatusEl.innerHTML = '<span style="color:var(--green)">' + matic.toFixed(4) + ' ' + gasSymbol + ' ✓ พอจ่าย gas</span>';
     }
   });
 }
@@ -1462,27 +1464,47 @@ function openOnchainConfirm(toId, toAddress, amount, note, slip, cat) {
 function closeOnchainConfirm() {
   document.getElementById('modal-onchain-confirm').classList.remove('open');
   pendingOnchainTransfer = null;
+  _clearOcTxStatus();
+  var cancelBtn = document.getElementById('oc-cancel-btn');
+  if (cancelBtn) cancelBtn.disabled = false;
+}
+
+// แสดง/ซ่อนสถานะระหว่างรอ blockchain ยืนยัน แบบค้างอยู่ในโมดัล (ไม่หายไปเองแบบ toast)
+function _setOcTxStatus(text) {
+  var el = document.getElementById('oc-tx-status');
+  var txt = document.getElementById('oc-tx-status-text');
+  if (el && txt) { txt.textContent = text; el.style.display = 'block'; }
+}
+function _clearOcTxStatus() {
+  var el = document.getElementById('oc-tx-status');
+  if (el) el.style.display = 'none';
 }
 
 async function proceedOnchainTransfer() {
   if (!pendingOnchainTransfer) return;
   var p = pendingOnchainTransfer;
   var btn = document.getElementById('oc-confirm-btn');
+  var cancelBtn = document.getElementById('oc-cancel-btn');
   btn.disabled = true; btn.innerHTML = '<span class="ico">⏳</span> รอ Bitget ยืนยัน...';
+  if (cancelBtn) cancelBtn.disabled = true;
+  _setOcTxStatus('รอการอนุมัติใน Bitget Wallet...');
 
   try {
     var tx = await sendOnchainUSDC(p.toAddress, p.amount);
     btn.innerHTML = '<span class="ico">⏳</span> กำลังบันทึกบน Blockchain...';
+    _setOcTxStatus('ส่งคำสั่งแล้ว กำลังรอ Blockchain ยืนยัน (~2-10 วิ)...');
     toast('info', 'ส่งคำสั่งแล้ว กำลังรอ Blockchain ยืนยัน (~2-10 วิ)...');
     await tx.wait();
     closeOnchainConfirm();
     processTransfer(p.toId, p.amount, p.note, p.slip, p.cat, tx.hash);
   } catch (err) {
     btn.disabled = false; btn.innerHTML = '✓ ยืนยันใน Bitget';
+    if (cancelBtn) cancelBtn.disabled = false;
+    _clearOcTxStatus();
     if (err && (err.code === 'ACTION_REJECTED' || err.code === 4001)) {
       toast('error', 'คุณยกเลิกการโอนใน Bitget Wallet');
     } else {
-      toast('error', 'โอนไม่สำเร็จ: ' + (err && (err.reason || err.shortMessage || err.message) || 'unknown error'));
+      toast('error', 'โอนไม่สำเร็จ: ' + friendlyError(err));
     }
   }
 }
@@ -1525,7 +1547,7 @@ function openChainSelector() {
     var raw = getInjectedProvider();
     if (raw) switchToPolygonNetwork(raw).then(function(){
       silentRefreshBalance();
-    }).catch(function(e){ toast('error','สลับเครือข่ายไม่สำเร็จ: '+e.message); });
+    }).catch(function(e){ toast('error','สลับเครือข่ายไม่สำเร็จ: '+friendlyError(e)); });
   }
   toast('success', 'สลับไป ' + chain.name + ' แล้ว');
 }
@@ -2209,28 +2231,29 @@ function openOnchainConfirmDirect(toId, toAddr, toName, amount) {
   document.getElementById('oc-to-name').textContent  = toName;
   document.getElementById('oc-to-addr').textContent  = shortenAddr(toAddr);
   document.getElementById('oc-amount').textContent   = amount.toFixed(2) + ' USDC (≈฿' + (amount * USDC_TO_THB).toLocaleString('th-TH',{maximumFractionDigits:0}) + ')';
-  document.getElementById('oc-gas-status').textContent = '⏳ กำลังตรวจสอบ MATIC...';
+  document.getElementById('oc-gas-status').textContent = '⏳ กำลังตรวจสอบ ' + getCurrentChain().gasSymbol + '...';
   document.getElementById('oc-warning').style.display  = 'none';
   document.getElementById('oc-confirm-btn').disabled   = false;
   document.getElementById('oc-confirm-btn').textContent = '✓ ยืนยันจ่าย USDC';
   document.getElementById('modal-onchain-confirm').classList.add('open');
 
-  // เช็ค MATIC gas
+  // เช็ค gas ของเชนที่ใช้อยู่
   getMaticBalance(connectedWalletAddress).then(function(matic){
     var gasEl = document.getElementById('oc-gas-status');
     var warnEl = document.getElementById('oc-warning');
+    var gasSymbol = getCurrentChain().gasSymbol;
     if (matic === null) { gasEl.textContent = '⚠️ ตรวจสอบไม่ได้'; return; }
     if (matic <= 0) {
-      gasEl.innerHTML = '<span style="color:var(--red)">0 MATIC ⚠️</span>';
+      gasEl.innerHTML = '<span style="color:var(--red)">0 ' + gasSymbol + ' ⚠️</span>';
       warnEl.style.display = 'block';
-      warnEl.textContent = '⚠️ ไม่มี MATIC จ่ายค่า gas — กรุณาเติม MATIC ก่อนโอน';
+      warnEl.textContent = '⚠️ ไม่มี ' + gasSymbol + ' จ่ายค่า gas — กรุณาเติม ' + gasSymbol + ' ก่อนโอน';
       document.getElementById('oc-confirm-btn').disabled = true;
     } else if (matic < 0.01) {
-      gasEl.innerHTML = '<span style="color:var(--yellow)">' + matic.toFixed(4) + ' MATIC (น้อย)</span>';
+      gasEl.innerHTML = '<span style="color:var(--yellow)">' + matic.toFixed(4) + ' ' + gasSymbol + ' (น้อย)</span>';
       warnEl.style.display = 'block';
-      warnEl.textContent = '⚠️ MATIC เหลือน้อย อาจไม่พอ';
+      warnEl.textContent = '⚠️ ' + gasSymbol + ' เหลือน้อย อาจไม่พอ';
     } else {
-      gasEl.innerHTML = '<span style="color:var(--green)">' + matic.toFixed(4) + ' MATIC ✓</span>';
+      gasEl.innerHTML = '<span style="color:var(--green)">' + matic.toFixed(4) + ' ' + gasSymbol + ' ✓</span>';
     }
   });
 }
@@ -2249,10 +2272,14 @@ proceedOnchainTransfer = async function() {
   // External address (ร้านค้า ไม่ใช่สมาชิกในแอป)
   if (p.toId === '_external_') {
     var btn = document.getElementById('oc-confirm-btn');
+    var cancelBtn = document.getElementById('oc-cancel-btn');
     btn.disabled = true; btn.innerHTML = '<span class="ico">⏳</span> รอ Bitget ยืนยัน...';
+    if (cancelBtn) cancelBtn.disabled = true;
+    _setOcTxStatus('รอการอนุมัติใน Bitget Wallet...');
     try {
       var tx = await sendOnchainUSDC(p.toAddress, p.amount);
       btn.innerHTML = '<span class="ico">⏳</span> บันทึกบน Blockchain...';
+      _setOcTxStatus('กำลังรอ Blockchain ยืนยัน...');
       toast('info', 'กำลังรอ Blockchain ยืนยัน...');
       await tx.wait();
       closeOnchainConfirm();
@@ -2265,8 +2292,10 @@ proceedOnchainTransfer = async function() {
       toast('success', 'จ่าย ' + p.amount.toFixed(2) + ' USDC ให้ ' + p.toName + ' สำเร็จ! 🎉');
     } catch(err) {
       btn.disabled = false; btn.innerHTML = '✓ ยืนยันจ่าย USDC';
+      if (cancelBtn) cancelBtn.disabled = false;
+      _clearOcTxStatus();
       if (err && (err.code === 'ACTION_REJECTED' || err.code === 4001)) toast('error', 'ยกเลิกการจ่าย');
-      else toast('error', 'จ่ายไม่สำเร็จ: ' + (err && (err.reason || err.message) || 'error'));
+      else toast('error', 'จ่ายไม่สำเร็จ: ' + friendlyError(err));
     }
     return;
   }
@@ -2571,6 +2600,38 @@ function confirmLogout(){
   document.getElementById('modal-confirm').classList.add('open');
 }
 function closeConfirm(){document.getElementById('modal-confirm').classList.remove('open');}
+
+// ============================================================
+// แปล error ดิบจาก wallet/RPC ให้เป็นข้อความไทยที่เข้าใจง่าย
+// ไม่เปลี่ยนพฤติกรรมเดิม แค่ทำให้ข้อความอ่านง่ายขึ้นตอนโชว์ toast
+// ============================================================
+function friendlyError(err) {
+  var raw = (err && (err.reason || err.shortMessage || err.message)) || String(err || 'unknown error');
+  var low = raw.toLowerCase();
+  if (low.indexOf('insufficient funds') !== -1 || low.indexOf('insufficient balance') !== -1) {
+    return 'ยอดเงินหรือค่า gas ไม่พอสำหรับทำธุรกรรมนี้';
+  }
+  if (low.indexOf('user rejected') !== -1 || low.indexOf('user denied') !== -1) {
+    return 'คุณยกเลิกรายการใน Bitget Wallet';
+  }
+  if (low.indexOf('gas required exceeds') !== -1 || low.indexOf('out of gas') !== -1) {
+    return 'ค่า gas ไม่พอสำหรับทำธุรกรรมนี้';
+  }
+  if (low.indexOf('nonce') !== -1) {
+    return 'มีธุรกรรมค้างอยู่ใน wallet กรุณาลองใหม่อีกครั้ง';
+  }
+  if (low.indexOf('network') !== -1 || low.indexOf('timeout') !== -1 || low.indexOf('failed to fetch') !== -1) {
+    return 'เชื่อมต่อเครือข่ายไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+  }
+  if (low.indexOf('execution reverted') !== -1) {
+    return 'ธุรกรรมถูกปฏิเสธจาก Smart Contract กรุณาตรวจสอบยอดเงินและลองใหม่';
+  }
+  if (low.indexOf('user disapproved') !== -1 || low.indexOf('unauthorized') !== -1) {
+    return 'Bitget Wallet ไม่อนุญาตให้ทำรายการนี้';
+  }
+  // ถ้าไม่ตรงกับ pattern ที่รู้จัก ให้ตัดข้อความดิบให้สั้นลงแทนที่จะโชว์ยาวเป็นพรืด
+  return raw.length > 80 ? raw.slice(0, 80) + '...' : raw;
+}
 
 // ============================================================
 // อุปกรณ์เสริม
