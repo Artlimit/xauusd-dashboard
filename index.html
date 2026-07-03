@@ -1019,7 +1019,7 @@ function save(key, data) {
 // BLOCKCHAIN / BITGET WALLET INTEGRATION
 // ============================================================
 // Constants ต้องอยู่ก่อน blockchain code ที่อ้างอิงมัน
-var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current' };
+var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain' };
 var COLORS = ['#c084fc','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171','#a78bfa','#fb923c'];
 var ROLES = ['เจ้าบ้าน','แม่บ้าน','ลูกชาย','ลูกสาว','ปู่','ย่า','ตา','ยาย','สมาชิก','ผู้ดูแล'];
 var LEVELS = [
@@ -1034,7 +1034,10 @@ var CHAINS = {
   arbitrum: { id:'0xa4b1', name:'Arbitrum',  usdc:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals:6,  rpc:'https://arb1.arbitrum.io/rpc',      explorer:'https://arbiscan.io',            native:'ETH',  gasSymbol:'ETH'  },
   base:     { id:'0x2105', name:'Base',      usdc:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals:6,  rpc:'https://mainnet.base.org',          explorer:'https://basescan.org',           native:'ETH',  gasSymbol:'ETH'  },
 };
-var currentChainKey = 'polygon'; // default
+var currentChainKey = (function(){
+  var saved = load(KEYS.chain, 'polygon');
+  return CHAINS[saved] ? saved : 'polygon'; // เผื่อ key เก่าไม่ตรงกับ CHAINS ปัจจุบัน
+})();
 var USDC_POLYGON = CHAINS.polygon.usdc; // backward compat
 var POLYGON_CHAIN_ID = CHAINS.polygon.id; // backward compat
 
@@ -1539,6 +1542,7 @@ function openChainSelector() {
   var keys = Object.keys(CHAINS);
   if (idx < 0 || idx >= keys.length) { toast('error','หมายเลขไม่ถูกต้อง'); return; }
   currentChainKey = keys[idx];
+  save(KEYS.chain, currentChainKey); // จำเครือข่ายที่เลือกไว้ ไม่ต้องรีเซ็ตเป็น Polygon ทุกครั้งที่โหลดหน้าใหม่
   var chain = getCurrentChain();
   document.getElementById('pf-chain-label').textContent = 'เครือข่าย: ' + chain.name;
   // rebuild contract + switch network
@@ -3041,6 +3045,9 @@ function exportCSV(){
 function init(){
   loadTheme();
   buildNumpad();
+  // แสดง label เครือข่ายให้ตรงกับที่จำไว้ (เผื่อไม่ใช่ Polygon)
+  var chainLabelEl = document.getElementById('pf-chain-label');
+  if (chainLabelEl) chainLabelEl.textContent = 'เครือข่าย: ' + getCurrentChain().name;
   try {
     var members=getMembers();
     var currentId=load(KEYS.current,null);
