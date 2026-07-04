@@ -1217,12 +1217,15 @@ window._onWCConnected = async function(address, rawProvider) {
 };
 
 async function connectBitgetWallet() {
-  // รอ EIP-6963 announce ก่อน — poll ซ้ำหลายรอบ (ไม่ใช่รอครั้งเดียว) กันกรณี wallet announce ตัวเองช้า
-  var raw = null;
-  for (var tries = 0; tries < 8 && !raw; tries++) {
-    window.dispatchEvent(new Event('eip6963:requestProvider'));
-    await new Promise(function(r){ setTimeout(r, 180); });
-    raw = getBitgetProvider();
+  // เช็คทันทีก่อนเลย เผื่อมี provider พร้อมอยู่แล้ว (เช่นจาก auto-reconnect ตอนโหลดหน้า) จะได้ไม่หน่วงรอ
+  var raw = getBitgetProvider();
+  if (!raw) {
+    // ถ้ายังไม่เจอ ค่อย poll ซ้ำสั้น ๆ กันกรณี wallet ประกาศตัวเอง (EIP-6963) ช้ากว่าปกตินิดหน่อย
+    for (var tries = 0; tries < 5 && !raw; tries++) {
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise(function(r){ setTimeout(r, 150); });
+      raw = getBitgetProvider();
+    }
   }
 
   // มี provider อยู่แล้ว (extension หรือ in-app browser) — เชื่อมทันที
@@ -1554,11 +1557,11 @@ function showWalletInProfile() {
   if (m.walletAddress) {
     badge.style.display = 'inline-block';
     badge.textContent = '🔗 ' + shortenAddr(m.walletAddress);
-    if (menuLabel) menuLabel.textContent = 'เปลี่ยนกระเป๋าที่เชื่อมต่อ';
+    if (menuLabel) { menuLabel.textContent = 'เปลี่ยนกระเป๋าที่เชื่อมต่อ'; menuLabel.style.color = 'var(--green)'; }
     if (disconnectItem) disconnectItem.style.display = 'flex';
   } else {
     badge.style.display = 'none';
-    if (menuLabel) menuLabel.textContent = 'เชื่อมต่อ Bitget Wallet';
+    if (menuLabel) { menuLabel.textContent = 'เชื่อมต่อ Bitget Wallet'; menuLabel.style.color = ''; }
     if (disconnectItem) disconnectItem.style.display = 'none';
   }
 }
