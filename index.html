@@ -1794,8 +1794,21 @@ function buildNumpad() {
 }
 var _pinProcessing = false; // กันกดค้าง/กดซ้อนระหว่างรอผลตรวจ PIN
 var _pinDotsResetTimer = null;
+var PIN_MAX_ATTEMPTS = 5; // จำนวนครั้งที่กรอกผิดได้ก่อนล็อกชั่วคราว (กันเดา PIN)
+var PIN_LOCKOUT_MS = 30000; // ระยะเวลาล็อก 30 วินาที
+function resetPinFails(){ save('pp_pin_fails',0); save('pp_pin_lock_until',0); }
 function pinInput(num){
   if(_pinProcessing) return;
+  var lockUntil = load('pp_pin_lock_until',0);
+  if (lockUntil) {
+    if (Date.now() < lockUntil) {
+      var remain = Math.ceil((lockUntil-Date.now())/1000);
+      toast('error','กรอก PIN ผิดหลายครั้งเกินไป กรุณารออีก '+remain+' วินาที');
+      return;
+    } else {
+      resetPinFails(); // หมดเวลาล็อกแล้ว รีเซ็ตให้กรอกใหม่ได้
+    }
+  }
   if(state.pinBuffer.length>=4)return;
   state.pinBuffer+=num;
   updatePinDots();
@@ -1827,6 +1840,13 @@ function pinError(){
   state.pinBuffer='';
   clearTimeout(_pinDotsResetTimer);
   _pinDotsResetTimer=setTimeout(updatePinDots,500);
+  // นับจำนวนครั้งที่กรอกผิด ถ้าเกินกำหนดให้ล็อกชั่วคราว กันการเดา PIN
+  var fails = load('pp_pin_fails',0) + 1;
+  save('pp_pin_fails', fails);
+  if (fails >= PIN_MAX_ATTEMPTS) {
+    save('pp_pin_lock_until', Date.now() + PIN_LOCKOUT_MS);
+    toast('error','กรอก PIN ผิดครบ '+PIN_MAX_ATTEMPTS+' ครั้ง กรุณารอ 30 วินาทีแล้วลองใหม่');
+  }
 }
 function openPin(title,sub,callback){
   _pinProcessing=false;
@@ -1843,6 +1863,7 @@ function startPinCheck(memberId){
   if(!member)return;
   openPin('ยืนยันตัวตน','กรอก PIN ของ '+member.name,function(pin){
     if(pin===member.pin){
+      resetPinFails();
       closePin();
       state.currentUserId=memberId;
       save(KEYS.current,memberId);
@@ -2661,6 +2682,7 @@ function openChangePin(){
   var m=getCurrentMember();
   openPin('กรอก PIN เดิม','เพื่อยืนยันตัวตนก่อนเปลี่ยน PIN',function(pin){
     if(pin!==m.pin){pinError();toast('error','PIN ไม่ถูกต้อง');return;}
+    resetPinFails();
     closePin();
     openPin('ตั้ง PIN ใหม่','กรอก PIN ใหม่ 4 หลัก',function(newPin){
       closePin();
@@ -3179,6 +3201,7 @@ function adminResetPin(targetId){
   var me=getCurrentMember();var target=getMember(targetId);
   openPin('ยืนยันด้วย PIN คุณ','รีเซ็ต PIN ของ '+target.name,function(pin){
     if(pin!==me.pin){pinError();toast('error','PIN ไม่ถูกต้อง');return;}
+    resetPinFails();
     closePin();
     openPin('ตั้ง PIN ใหม่ให้ '+target.name,'กรอก PIN 4 หลักใหม่',function(newPin){
       closePin();
