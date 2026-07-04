@@ -1217,12 +1217,13 @@ window._onWCConnected = async function(address, rawProvider) {
 };
 
 async function connectBitgetWallet() {
-  // รอ EIP-6963 announce ก่อน
-  await new Promise(function(r){ setTimeout(r, 200); });
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-  await new Promise(function(r){ setTimeout(r, 100); });
-
-  var raw = getBitgetProvider();
+  // รอ EIP-6963 announce ก่อน — poll ซ้ำหลายรอบ (ไม่ใช่รอครั้งเดียว) กันกรณี wallet announce ตัวเองช้า
+  var raw = null;
+  for (var tries = 0; tries < 8 && !raw; tries++) {
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    await new Promise(function(r){ setTimeout(r, 180); });
+    raw = getBitgetProvider();
+  }
 
   // มี provider อยู่แล้ว (extension หรือ in-app browser) — เชื่อมทันที
   if (raw) {
@@ -1255,11 +1256,13 @@ async function doConnectWithProvider(raw) {
   if (_connectInFlight) { toast('info','กำลังเชื่อมต่ออยู่ กรุณารอสักครู่...'); return; }
   _connectInFlight = true;
   try {
-    // ถอด listener เก่าออกก่อน (เผื่อเหลือจากรอบเชื่อมต่อ/ตัดการเชื่อมต่อก่อนหน้า) กันซ้อนกันจนงง
-    if (_activeRawProvider && _activeRawProvider.removeListener) {
-      if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
-      if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
-    }
+    // ถอด listener เก่าออกก่อน (เผื่อเหลือจากรอบเชื่อมต่อ/ตัดการเชื่อมต่อก่อนหน้า) กันซ้อนกันจนงง — ครอบ try/catch แยก กันพังจนเชื่อมต่อใหม่ไม่ได้
+    try {
+      if (_activeRawProvider && _activeRawProvider.removeListener) {
+        if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
+        if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+      }
+    } catch (e) { console.warn('removeListener error ก่อนเชื่อมต่อใหม่ (ไม่กระทบการเชื่อมต่อ)', e); }
     var accounts = await raw.request({ method: 'eth_requestAccounts' });
     connectedWalletAddress = accounts[0].toLowerCase();
     await switchToPolygonNetwork(raw);
@@ -1618,15 +1621,13 @@ function disconnectWalletOnly() {
   var idx = members.findIndex(function(mm){ return mm.id === m.id; });
   if (idx >= 0) { delete members[idx].walletAddress; save(KEYS.members, members); }
 
-  // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา
-  if (_activeRawProvider && _activeRawProvider.removeListener) {
-    if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
-    if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
-  }
-  // best-effort ขอถอนสิทธิ์จาก wallet ด้วย (ไม่ทุก wallet รองรับ ไม่เป็นไรถ้า fail)
-  if (_activeRawProvider && _activeRawProvider.request) {
-    _activeRawProvider.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] }).catch(function(){});
-  }
+  // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา (ครอบ try/catch กันบาง wallet โยน error แบบ sync)
+  try {
+    if (_activeRawProvider && _activeRawProvider.removeListener) {
+      if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
+      if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+    }
+  } catch (e) { console.warn('removeListener error (ไม่กระทบการตัดการเชื่อมต่อ)', e); }
   _activeRawProvider = null; _onAccountsChangedHandler = null; _onChainChangedHandler = null;
 
   connectedWalletAddress = null;
@@ -1781,11 +1782,29 @@ function buildNumpad() {
     pad.appendChild(btn);
   });
 }
+var _pinProcessing = false; // กันกดค้าง/กดซ้อนระหว่างรอผลตรวจ PIN
+var _pinDotsResetTimer = null;
 function pinInput(num){
+  if(_pinProcessing) return;
   if(state.pinBuffer.length>=4)return;
   state.pinBuffer+=num;
   updatePinDots();
-  if(state.pinBuffer.length===4){setTimeout(function(){if(state.pinCallback)state.pinCallback(state.pinBuffer);},200);}
+  if(state.pinBuffer.length===4){
+    _pinProcessing=true;
+    setTimeout(function(){
+      var cb=state.pinCallback;
+      var entered=state.pinBuffer;
+      try{
+        if(cb) cb(entered);
+      }catch(e){
+        console.error('PIN callback error:',e);
+        toast('error','เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+      }
+      // เคลียร์ buffer เสมอหลังประมวลผล กันปุ่มค้างแม้ callback จะลืม reset หรือ error ก็ตาม
+      state.pinBuffer='';
+      _pinProcessing=false;
+    },200);
+  }
 }
 function pinDelete(){state.pinBuffer=state.pinBuffer.slice(0,-1);updatePinDots();}
 function updatePinDots(){
@@ -1796,16 +1815,19 @@ function pinError(){
   var dots=document.querySelectorAll('#pin-dots .pin-dot');
   dots.forEach(function(d){d.classList.add('error');d.classList.remove('filled');});
   state.pinBuffer='';
-  setTimeout(updatePinDots,500);
+  clearTimeout(_pinDotsResetTimer);
+  _pinDotsResetTimer=setTimeout(updatePinDots,500);
 }
 function openPin(title,sub,callback){
+  _pinProcessing=false;
+  clearTimeout(_pinDotsResetTimer);
   state.pinBuffer='';state.pinCallback=callback;
   document.getElementById('pin-title').textContent=title||'กรอก PIN';
   document.getElementById('pin-sub').textContent=sub||'ป้อนรหัส PIN 4 หลักของคุณ';
   updatePinDots();
   document.getElementById('modal-pin').classList.add('open');
 }
-function closePin(){document.getElementById('modal-pin').classList.remove('open');state.pinBuffer='';state.pinCallback=null;}
+function closePin(){_pinProcessing=false;clearTimeout(_pinDotsResetTimer);document.getElementById('modal-pin').classList.remove('open');state.pinBuffer='';state.pinCallback=null;}
 function startPinCheck(memberId){
   var member=getMember(memberId);
   if(!member)return;
