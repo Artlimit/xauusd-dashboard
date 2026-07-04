@@ -1255,11 +1255,13 @@ async function doConnectWithProvider(raw) {
   if (_connectInFlight) { toast('info','กำลังเชื่อมต่ออยู่ กรุณารอสักครู่...'); return; }
   _connectInFlight = true;
   try {
-    // ถอด listener เก่าออกก่อน (เผื่อเหลือจากรอบเชื่อมต่อ/ตัดการเชื่อมต่อก่อนหน้า) กันซ้อนกันจนงง
-    if (_activeRawProvider && _activeRawProvider.removeListener) {
-      if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
-      if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
-    }
+    // ถอด listener เก่าออกก่อน (เผื่อเหลือจากรอบเชื่อมต่อ/ตัดการเชื่อมต่อก่อนหน้า) กันซ้อนกันจนงง — ครอบ try/catch แยก กันพังจนเชื่อมต่อใหม่ไม่ได้
+    try {
+      if (_activeRawProvider && _activeRawProvider.removeListener) {
+        if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
+        if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+      }
+    } catch (e) { console.warn('removeListener error ก่อนเชื่อมต่อใหม่ (ไม่กระทบการเชื่อมต่อ)', e); }
     var accounts = await raw.request({ method: 'eth_requestAccounts' });
     connectedWalletAddress = accounts[0].toLowerCase();
     await switchToPolygonNetwork(raw);
@@ -1618,15 +1620,13 @@ function disconnectWalletOnly() {
   var idx = members.findIndex(function(mm){ return mm.id === m.id; });
   if (idx >= 0) { delete members[idx].walletAddress; save(KEYS.members, members); }
 
-  // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา
-  if (_activeRawProvider && _activeRawProvider.removeListener) {
-    if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
-    if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
-  }
-  // best-effort ขอถอนสิทธิ์จาก wallet ด้วย (ไม่ทุก wallet รองรับ ไม่เป็นไรถ้า fail)
-  if (_activeRawProvider && _activeRawProvider.request) {
-    _activeRawProvider.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] }).catch(function(){});
-  }
+  // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา (ครอบ try/catch กันบาง wallet โยน error แบบ sync)
+  try {
+    if (_activeRawProvider && _activeRawProvider.removeListener) {
+      if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
+      if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+    }
+  } catch (e) { console.warn('removeListener error (ไม่กระทบการตัดการเชื่อมต่อ)', e); }
   _activeRawProvider = null; _onAccountsChangedHandler = null; _onChainChangedHandler = null;
 
   connectedWalletAddress = null;
