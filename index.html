@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>PuppyPocket — กระเป๋าครอบครัว</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
@@ -89,8 +89,8 @@
     }
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     body{background:#0a0612;color:var(--fg);font-family:'Prompt','Nunito',sans-serif;
-      min-height:100vh;display:flex;justify-content:center;overflow:hidden}
-    .phone{width:100%;max-width:420px;height:100vh;position:relative;overflow:hidden;
+      min-height:100vh;min-height:100dvh;display:flex;justify-content:center;overflow:hidden}
+    .phone{width:100%;max-width:420px;height:100vh;height:100dvh;position:relative;overflow:hidden;
       background:linear-gradient(170deg,#2d1b4e 0%,#1a0f2e 40%,#120a20 100%)}
     @media(min-width:500px){
       body{padding:1.5rem 0;align-items:center}
@@ -147,7 +147,7 @@
     .add-member-card:hover{border-color:var(--purple-mid);background:rgba(139,95,207,.05)}
     .add-member-card .mc-avatar{background:rgba(139,95,207,.15);color:var(--purple-light);font-size:1.5rem}
 
-    .main-screen{padding:0 0 90px}
+    .main-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .top-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px}
     .nav-brand{display:flex;align-items:center;gap:8px}
     .nav-brand-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--purple-mid),var(--pink));
@@ -220,7 +220,7 @@
     .tx-amt .st{font-size:.6rem;color:var(--fg-m);margin-top:2px}
     .empty-state{padding:3rem 20px;text-align:center;color:var(--fg-m);font-size:.85rem}
 
-    .history-screen{padding:0 0 90px}
+    .history-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .page-hdr{display:flex;align-items:center;gap:14px;padding:16px 20px;position:sticky;top:0;
       background:rgba(26,15,46,.92);backdrop-filter:blur(16px);z-index:10}
     .page-back{width:38px;height:38px;background:var(--bg-card);border:1px solid var(--border);
@@ -236,7 +236,7 @@
     .ftab.active{background:var(--purple-mid);border-color:var(--purple-mid);color:white}
     .ftab:hover:not(.active){border-color:var(--purple-light);color:var(--fg)}
 
-    .family-screen{padding:0 0 90px}
+    .family-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .fam-member{display:flex;align-items:center;gap:14px;padding:16px 20px;
       border-bottom:1px solid var(--border);transition:background .2s;cursor:pointer}
     .fam-member:hover{background:var(--bg-card)}
@@ -252,7 +252,7 @@
     .fam-total .lbl{font-size:.72rem;color:var(--fg-m);margin-bottom:4px}
     .fam-total .val{font-family:'Nunito',sans-serif;font-size:2rem;font-weight:900;color:var(--yellow)}
 
-    .profile-screen{padding:0 0 90px}
+    .profile-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .pf-center{display:flex;flex-direction:column;align-items:center;padding:2rem 20px}
     .pf-avatar{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;
       justify-content:center;font-size:2rem;font-weight:900;color:white;font-family:'Nunito',sans-serif;
@@ -316,8 +316,8 @@
       pointer-events:none;transition:opacity .3s}
     .sheet-overlay.open{opacity:1;pointer-events:all}
     .sheet{width:100%;max-width:420px;background:linear-gradient(180deg,#2a1a45,var(--bg));
-      border-radius:28px 28px 0 0;padding:16px 24px 40px;transform:translateY(100%);
-      transition:transform .4s cubic-bezier(.16,1,.3,1);max-height:85vh;overflow-y:auto}
+      border-radius:28px 28px 0 0;padding:16px 24px calc(40px + env(safe-area-inset-bottom));transform:translateY(100%);
+      transition:transform .4s cubic-bezier(.16,1,.3,1);max-height:85vh;max-height:85dvh;overflow-y:auto}
     .sheet::-webkit-scrollbar{display:none}
     .sheet-overlay.open .sheet{transform:translateY(0)}
     .sheet-handle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:999px;margin:0 auto 16px}
