@@ -7,6 +7,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Firebase (ใช้สำหรับซิงค์รหัสครอบครัว + ตำแหน่ง GPS ข้ามเครื่อง) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- WalletConnect AppKit (Reown) — ไม่ต้อง bundler -->
   <script type="module">
     import { createAppKit } from 'https://esm.run/@reown/appkit@1.6.8';
@@ -146,6 +150,29 @@
     .add-member-card{border:2px dashed rgba(139,95,207,.3);background:transparent}
     .add-member-card:hover{border-color:var(--purple-mid);background:rgba(139,95,207,.05)}
     .add-member-card .mc-avatar{background:rgba(139,95,207,.15);color:var(--purple-light);font-size:1.5rem}
+
+    /* GPS */
+    .nav-gps-btn{width:36px;height:36px;border-radius:12px;background:var(--bg-card);border:1px solid var(--border);
+      display:flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;margin-right:8px;transition:background .2s}
+    .nav-gps-btn:active{transform:scale(.94)}
+    .nav-gps-btn.sharing{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.4)}
+    .gps-row-wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--border)}
+    .gps-toggle{position:relative;width:46px;height:26px;border-radius:999px;background:rgba(255,255,255,.15);
+      cursor:pointer;transition:background .2s;flex-shrink:0}
+    .gps-toggle.on{background:var(--green)}
+    .gps-toggle .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:white;
+      transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+    .gps-toggle.on .knob{left:23px}
+    .gps-member-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)}
+    .gps-member-row:last-child{border-bottom:none}
+    .gps-m-name{font-size:.85rem;font-weight:600}
+    .gps-m-time{font-size:.65rem;color:var(--fg-m)}
+    .gps-map-link{margin-left:auto;font-size:.7rem;color:var(--purple-light);background:rgba(139,95,207,.12);
+      padding:6px 10px;border-radius:999px;white-space:nowrap;text-decoration:none;flex-shrink:0}
+    .fam-code-box{display:flex;align-items:center;gap:8px;background:var(--bg-card);border:1px solid var(--border);
+      border-radius:12px;padding:10px 14px;font-family:monospace;font-size:1rem;letter-spacing:.15em;justify-content:center}
+    .w-link-btn{background:none;border:none;color:var(--purple-light);font-size:.78rem;font-family:inherit;
+      cursor:pointer;text-decoration:underline;margin-top:6px}
 
     .main-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .top-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px}
@@ -450,6 +477,23 @@
       <p style="font-size:.62rem;color:var(--fg-m);text-align:center;line-height:1.6;margin-top:4px">
         Bitget Wallet จะถูกขอเชื่อมต่อเฉพาะตอนส่งเงินจริงเท่านั้น
       </p>
+      <button type="button" class="w-link-btn" onclick="openJoinFamily()">มีรหัสครอบครัวอยู่แล้ว? เข้าร่วมที่นี่</button>
+    </div>
+  </div>
+
+  <!-- เข้าร่วมครอบครัวด้วยรหัส (สำหรับติดตั้งแอปในเครื่อง/มือถือของสมาชิกคนอื่น) -->
+  <div class="modal-overlay" id="modal-join-family">
+    <div class="pin-modal" style="max-height:82vh;overflow-y:auto">
+      <button type="button" onclick="closeJoinFamily()" aria-label="ปิด" style="position:absolute;top:14px;right:14px;background:none;border:none;color:var(--fg-m);font-size:1.4rem;line-height:1;cursor:pointer;padding:6px">×</button>
+      <div class="pin-title">เข้าร่วมครอบครัว</div>
+      <div class="pin-sub" id="join-step-sub">กรอกรหัสครอบครัว 6 หลักที่เจ้าบ้านให้มา</div>
+      <div id="join-step-code">
+        <input class="w-input" id="join-code-input" placeholder="เช่น A1B2C3" maxlength="6" style="text-transform:uppercase;text-align:center;letter-spacing:.2em;font-family:monospace;margin:16px 0">
+        <button class="w-btn" onclick="submitJoinCode()">ค้นหาครอบครัว</button>
+      </div>
+      <div id="join-step-members" style="display:none">
+        <div class="member-grid" id="join-member-grid" style="margin:16px 0"></div>
+      </div>
     </div>
   </div>
 
@@ -468,9 +512,12 @@
         <div class="nav-brand-icon">🐾</div>
         <span class="nav-brand-text">PuppyPocket</span>
       </div>
-      <div class="nav-user" onclick="navigate('profile')">
-        <span class="nav-user-name" id="nav-username"></span>
-        <div class="nav-user-avatar" id="nav-avatar"></div>
+      <div style="display:flex;align-items:center">
+        <div class="nav-gps-btn" id="nav-gps-btn" onclick="openGPS()" title="ตำแหน่ง GPS">🐾</div>
+        <div class="nav-user" onclick="navigate('profile')">
+          <span class="nav-user-name" id="nav-username"></span>
+          <div class="nav-user-avatar" id="nav-avatar"></div>
+        </div>
       </div>
     </nav>
     <div class="puppy-small">
@@ -933,6 +980,32 @@
     </div>
   </div>
 
+  <!-- GPS Modal -->
+  <div class="sheet-overlay" id="modal-gps" onclick="closeGPSOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🐾 ตำแหน่ง GPS</div>
+      <div class="gps-row-wrap">
+        <div>
+          <div style="font-size:.85rem;font-weight:600">แชร์ตำแหน่งของฉัน</div>
+          <div style="font-size:.65rem;color:var(--fg-m)" id="gps-my-status">ปิดอยู่</div>
+        </div>
+        <div class="gps-toggle" id="gps-my-toggle" onclick="toggleMyGPS()"><div class="knob"></div></div>
+      </div>
+      <p style="font-size:.65rem;color:var(--fg-m);margin:10px 0 4px;line-height:1.5" id="gps-hint">
+        เมื่อเปิด เจ้าบ้านของครอบครัวจะเห็นตำแหน่งปัจจุบันของคุณได้
+      </p>
+      <div id="gps-owner-section" style="display:none;margin-top:16px">
+        <div style="font-size:.72rem;color:var(--fg-m);font-weight:600;margin-bottom:6px">ตำแหน่งสมาชิกในครอบครัว</div>
+        <div id="gps-member-list"></div>
+      </div>
+      <div id="gps-code-section" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);display:none">
+        <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">รหัสครอบครัว (ให้สมาชิกคนอื่นใช้เข้าร่วมจากมือถือของตัวเอง)</div>
+        <div class="fam-code-box" id="gps-fam-code">------</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Backup Modal -->
   <div class="sheet-overlay" id="modal-backup" onclick="closeBackupOutside(event)">
     <div class="sheet">
@@ -1032,6 +1105,62 @@ function save(key, data) {
 var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain' };
 var COLORS = ['#c084fc','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171','#a78bfa','#fb923c'];
 var ROLES = ['เจ้าบ้าน','แม่บ้าน','ลูกชาย','ลูกสาว','ปู่','ย่า','ตา','ยาย','สมาชิก','ผู้ดูแล'];
+
+// ============================================================
+// Firebase — ใช้ซิงค์ "รหัสครอบครัว" (member list) + ตำแหน่ง GPS ข้ามเครื่อง
+// ⚠️ ต้องแทนที่ค่าด้านล่างด้วย config ของโปรเจกต์ Firebase ของคุณเอง ก่อนใช้งานจริง
+// วิธีได้ config: Firebase Console > สร้างโปรเจกต์ > Project settings > Your apps > Web app (</>)
+// อย่าลืมเปิด Firestore Database (โหมด production) และเปิด Authentication > Anonymous
+// ============================================================
+var firebaseConfig = {
+  apiKey: "AIzaSyBWMBvlc55XT2ms5zRgw02U0al3l8fxKjw",
+  authDomain: "puppy-pocket.firebaseapp.com",
+  projectId: "puppy-pocket",
+  storageBucket: "puppy-pocket.firebasestorage.app",
+  messagingSenderId: "961285778608",
+  appId: "1:961285778608:web:4dfec134f137ef0eeb1f75"
+};
+var _fb = { app:null, db:null, ready:false, authReady:null };
+function initFirebase(){
+  if (_fb.ready) return Promise.resolve(true);
+  if (_fb.authReady) return _fb.authReady;
+  _fb.authReady = new Promise(function(resolve){
+    try{
+      if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'YOUR_API_KEY') {
+        console.warn('Firebase ยังไม่ได้ตั้งค่า — ฟีเจอร์รหัสครอบครัว/GPS ข้ามเครื่องจะใช้งานไม่ได้');
+        resolve(false); return;
+      }
+      _fb.app = firebase.initializeApp(firebaseConfig);
+      _fb.db = firebase.firestore();
+      firebase.auth().signInAnonymously().then(function(){
+        _fb.ready = true; resolve(true);
+      }).catch(function(err){ console.warn('Firebase auth error', err); resolve(false); });
+    }catch(err){ console.warn('Firebase init error', err); resolve(false); }
+  });
+  return _fb.authReady;
+}
+function genFamilyCode(){
+  var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ตัด O,0,I,1 กันสับสน
+  var code='';
+  for(var i=0;i<6;i++) code+=chars.charAt(Math.floor(Math.random()*chars.length));
+  return code;
+}
+// อัปโหลดข้อมูลครอบครัว+สมาชิกชุดปัจจุบันขึ้น cloud (best-effort ไม่บล็อก UI ถ้าพัง)
+function pushFamilyToCloud(){
+  initFirebase().then(function(ok){
+    if(!ok) return;
+    var fam=getFamily(); if(!fam || !fam.code) return;
+    var members=getMembers();
+    _fb.db.collection('families').doc(fam.code).set({
+      name: fam.name||'', updatedAt: Date.now()
+    }, {merge:true}).catch(function(e){console.warn('push family error',e);});
+    members.forEach(function(m){
+      _fb.db.collection('families').doc(fam.code).collection('members').doc(m.id).set({
+        name:m.name, role:m.role, color:m.color, pin:m.pin, updatedAt: Date.now()
+      }, {merge:true}).catch(function(e){console.warn('push member error',e);});
+    });
+  });
+}
 var LEVELS = [
   {name:'Puppy Beginner',min:0},{name:'Puppy Explorer',min:500},
   {name:'Puppy Adventurer',min:2000},{name:'Puppy Master',min:5000},{name:'Puppy Legend',min:15000}
@@ -1318,10 +1447,12 @@ function linkWalletToSession() {
     var fName = (document.getElementById('w-family') && document.getElementById('w-family').value.trim()) || 'ครอบครัวของฉัน';
     var mName = (document.getElementById('w-name') && document.getElementById('w-name').value.trim()) || 'เจ้าของกระเป๋า';
     var memberId = uid();
-    save(KEYS.family, { name: fName, created: Date.now() });
+    var famCode = genFamilyCode();
+    save(KEYS.family, { name: fName, created: Date.now(), code: famCode });
     save(KEYS.members, [{ id: memberId, name: mName, role: ROLES[0], color: COLORS[0], pin: '0000', walletAddress: connectedWalletAddress, createdAt: Date.now() }]);
     save(KEYS.accounts, {}); save(KEYS.tx, []); save(KEYS.current, memberId);
     state.currentUserId = memberId;
+    pushFamilyToCloud();
     navigate('main');
     setTimeout(startAutoRefresh, 800);
   } else {
@@ -1746,12 +1877,81 @@ function createFamily() {
   if(!mName){toast('error','กรุณาใส่ชื่อของคุณ');return;}
   if(!/^\d{4}$/.test(mPin)){toast('error','PIN ต้องเป็นตัวเลข 4 หลัก');return;}
   var memberId=uid();
-  save(KEYS.family,{name:fName,created:Date.now()});
+  var famCode=genFamilyCode();
+  save(KEYS.family,{name:fName,created:Date.now(),code:famCode});
   save(KEYS.members,[{id:memberId,name:mName,role:ROLES[0],color:COLORS[0],pin:mPin,createdAt:Date.now()}]);
   save(KEYS.accounts,{[memberId]:{balance:0}});
   save(KEYS.tx,[]);
-  toast('success','สร้าง '+fName+' สำเร็จแล้ว');
+  pushFamilyToCloud();
+  toast('success','สร้าง '+fName+' สำเร็จแล้ว (รหัสครอบครัว: '+famCode+')');
   showLogin();
+}
+
+// ============================================================
+// เข้าร่วมครอบครัวจากเครื่อง/มือถืออีกเครื่อง ด้วยรหัสครอบครัว
+// ============================================================
+var _joinFoundCode=null, _joinFoundMembers=null, _joinFoundFamilyName=null;
+function openJoinFamily(){
+  document.getElementById('join-code-input').value='';
+  document.getElementById('join-step-code').style.display='block';
+  document.getElementById('join-step-members').style.display='none';
+  document.getElementById('join-step-sub').textContent='กรอกรหัสครอบครัว 6 หลักที่เจ้าบ้านให้มา';
+  document.getElementById('modal-join-family').classList.add('open');
+}
+function closeJoinFamily(){document.getElementById('modal-join-family').classList.remove('open');}
+function submitJoinCode(){
+  var code=document.getElementById('join-code-input').value.trim().toUpperCase();
+  if(!code || code.length<4){toast('error','กรุณากรอกรหัสครอบครัวให้ถูกต้อง');return;}
+  toast('info','กำลังค้นหาครอบครัว...');
+  initFirebase().then(function(ok){
+    if(!ok){toast('error','ยังไม่ได้ตั้งค่า Firebase ในแอปนี้ ติดต่อเจ้าบ้านให้ตั้งค่าก่อน');return;}
+    _fb.db.collection('families').doc(code).get().then(function(famDoc){
+      if(!famDoc.exists){toast('error','ไม่พบครอบครัวที่ใช้รหัสนี้');return;}
+      _fb.db.collection('families').doc(code).collection('members').get().then(function(snap){
+        if(snap.empty){toast('error','ยังไม่มีสมาชิกในครอบครัวนี้');return;}
+        _joinFoundCode=code;
+        _joinFoundFamilyName=famDoc.data().name||'ครอบครัว';
+        _joinFoundMembers=[];
+        snap.forEach(function(doc){ _joinFoundMembers.push(Object.assign({id:doc.id},doc.data())); });
+        renderJoinMemberGrid();
+      }).catch(function(e){console.warn(e);toast('error','เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');});
+    }).catch(function(e){console.warn(e);toast('error','เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');});
+  });
+}
+function renderJoinMemberGrid(){
+  document.getElementById('join-step-sub').textContent=_joinFoundFamilyName+' — เลือกโปรไฟล์ของคุณ';
+  var grid=document.getElementById('join-member-grid');
+  grid.innerHTML='';
+  _joinFoundMembers.forEach(function(m){
+    var card=document.createElement('div');
+    card.className='member-card';
+    card.innerHTML=avatarHTML({id:m.id,name:m.name,color:m.color||'#8b5fcf'},52)+'<div class="mc-name">'+m.name+'</div><div class="mc-role">'+(m.role||'')+'</div>';
+    card.onclick=function(){ confirmJoinAsMember(m); };
+    grid.appendChild(card);
+  });
+  document.getElementById('join-step-code').style.display='none';
+  document.getElementById('join-step-members').style.display='block';
+}
+function confirmJoinAsMember(m){
+  openPin('ยืนยันตัวตน','กรอก PIN ของ '+m.name,function(pin){
+    if(pin!==m.pin){pinError();toast('error','PIN ไม่ถูกต้อง');return;}
+    resetPinFails();
+    closePin();
+    // บันทึกครอบครัว+สมาชิกทั้งหมดลงเครื่องนี้ (mirror จาก cloud) แล้วล็อกอินเป็นสมาชิกที่เลือก
+    save(KEYS.family,{name:_joinFoundFamilyName,created:Date.now(),code:_joinFoundCode});
+    var localMembers=_joinFoundMembers.map(function(x){
+      return {id:x.id,name:x.name,role:x.role,color:x.color||'#8b5fcf',pin:x.pin,createdAt:x.createdAt||Date.now()};
+    });
+    save(KEYS.members,localMembers);
+    var accounts={}; localMembers.forEach(function(x){accounts[x.id]={balance:0};});
+    save(KEYS.accounts,accounts);
+    save(KEYS.tx,[]);
+    save(KEYS.current,m.id);
+    state.currentUserId=m.id;
+    closeJoinFamily();
+    toast('success','เข้าร่วม '+_joinFoundFamilyName+' สำเร็จแล้ว');
+    navigate('main');
+  });
 }
 
 // ============================================================
@@ -1874,6 +2074,7 @@ function startPinCheck(memberId){
         if(idx>=0){members[idx].walletAddress=connectedWalletAddress;save(KEYS.members,members);}
       }
       navigate('main');
+      resumeGPSIfNeeded();
       if(connectedWalletAddress) setTimeout(startAutoRefresh,800);
     } else {
       pinError();toast('error','PIN ไม่ถูกต้อง');
@@ -2607,6 +2808,7 @@ function addMember(){
   var accounts=load(KEYS.accounts,{});accounts[newId]={balance:0};save(KEYS.accounts,accounts);
   document.getElementById('modal-add').classList.remove('open');
   document.getElementById('add-wallet').value='';
+  pushFamilyToCloud();
   toast('success','เพิ่ม '+name+' สำเร็จแล้ว');renderFamily();
 }
 function closeAddOutside(e){if(e.target===e.currentTarget)document.getElementById('modal-add').classList.remove('open');}
@@ -2688,6 +2890,7 @@ function openChangePin(){
       closePin();
       var members=getMembers();var idx=members.findIndex(function(x){return x.id===m.id;});
       if(idx>=0){members[idx].pin=newPin;save(KEYS.members,members);}
+      pushFamilyToCloud();
       toast('success','เปลี่ยน PIN สำเร็จแล้ว');
     });
   });
@@ -2742,7 +2945,8 @@ function closeTopUpOutside(e){if(e.target===e.currentTarget)document.getElementB
 function showFamilyInfo(){
   var fam=getFamily();var members=getMembers();
   var d=new Date(fam.created||Date.now());
-  toast('info',fam.name+' — สมาชิก '+members.length+' คน สร้างเมื่อ '+d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear());
+  var codeMsg = fam.code ? (' | รหัสครอบครัว: '+fam.code) : '';
+  toast('info',fam.name+' — สมาชิก '+members.length+' คน สร้างเมื่อ '+d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()+codeMsg);
 }
 function confirmLogout(){
   document.getElementById('confirm-icon').innerHTML='🚪';
@@ -2750,7 +2954,7 @@ function confirmLogout(){
   document.getElementById('confirm-msg').textContent='คุณจะกลับไปหน้าเลือกโปรไฟล์';
   var actionBtn=document.getElementById('confirm-action');
   actionBtn.textContent='ออกจากระบบ';actionBtn.className='cb-danger';
-  actionBtn.onclick=function(){closeConfirm();state.currentUserId=null;save(KEYS.current,null);showLogin();};
+  actionBtn.onclick=function(){closeConfirm();stopWatchingMyGPS();if(_gpsUnsub){_gpsUnsub();_gpsUnsub=null;}state.currentUserId=null;save(KEYS.current,null);showLogin();};
   document.getElementById('modal-confirm').classList.add('open');
 }
 function closeConfirm(){document.getElementById('modal-confirm').classList.remove('open');}
@@ -3207,6 +3411,7 @@ function adminResetPin(targetId){
       closePin();
       var members=getMembers();var idx=members.findIndex(function(x){return x.id===targetId;});
       if(idx>=0){members[idx].pin=newPin;save(KEYS.members,members);}
+      pushFamilyToCloud();
       document.getElementById('modal-admin-reset').classList.remove('open');
       toast('success','รีเซ็ต PIN ของ '+target.name+' สำเร็จแล้ว');
     });
@@ -3234,6 +3439,109 @@ function exportCSV(){
 }
 
 // ============================================================
+// GPS — แชร์ตำแหน่งให้เจ้าบ้านเห็น (ต้องตั้งค่า Firebase ก่อนใช้งานข้ามเครื่อง)
+// ============================================================
+var _gpsWatchId=null;
+var _gpsUnsub=null;
+function gpsSharingKey(){ var m=getCurrentMember(); return m?('pp_gps_sharing_'+m.id):'pp_gps_sharing_none'; }
+function isGPSSharing(){ return load(gpsSharingKey(),false); }
+function openGPS(){
+  var me=getCurrentMember(); if(!me) return;
+  var fam=getFamily();
+  var sharing=isGPSSharing();
+  updateGPSToggleUI(sharing);
+  document.getElementById('gps-hint').style.display = (me.role==='เจ้าบ้าน') ? 'none' : 'block';
+  if(me.role==='เจ้าบ้าน'){
+    document.getElementById('gps-owner-section').style.display='block';
+    document.getElementById('gps-code-section').style.display='block';
+    document.getElementById('gps-fam-code').textContent=fam.code||'ยังไม่มีรหัส';
+    startWatchingOthersGPS();
+  } else {
+    document.getElementById('gps-owner-section').style.display='none';
+    document.getElementById('gps-code-section').style.display='none';
+  }
+  document.getElementById('modal-gps').classList.add('open');
+}
+function closeGPSOutside(e){ if(e.target===e.currentTarget) document.getElementById('modal-gps').classList.remove('open'); }
+function updateGPSToggleUI(sharing){
+  var tg=document.getElementById('gps-my-toggle');
+  tg.classList.toggle('on',sharing);
+  document.getElementById('gps-my-status').textContent = sharing ? 'เปิดอยู่ — กำลังแชร์ตำแหน่ง' : 'ปิดอยู่';
+  var navBtn=document.getElementById('nav-gps-btn'); if(navBtn) navBtn.classList.toggle('sharing',sharing);
+}
+function toggleMyGPS(){
+  var next=!isGPSSharing();
+  if(next){
+    if(!navigator.geolocation){toast('error','อุปกรณ์นี้ไม่รองรับ GPS');return;}
+    navigator.geolocation.getCurrentPosition(function(pos){
+      save(gpsSharingKey(),true);
+      updateGPSToggleUI(true);
+      pushMyLocation(pos.coords.latitude,pos.coords.longitude);
+      startWatchingMyGPS();
+      toast('success','เปิดแชร์ตำแหน่งแล้ว');
+    }, function(err){
+      toast('error','ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง กรุณาอนุญาตในเบราว์เซอร์');
+    }, {enableHighAccuracy:true,timeout:10000});
+  } else {
+    save(gpsSharingKey(),false);
+    updateGPSToggleUI(false);
+    stopWatchingMyGPS();
+    toast('info','ปิดแชร์ตำแหน่งแล้ว');
+  }
+}
+function startWatchingMyGPS(){
+  if(_gpsWatchId!==null) return;
+  if(!navigator.geolocation) return;
+  _gpsWatchId=navigator.geolocation.watchPosition(function(pos){
+    pushMyLocation(pos.coords.latitude,pos.coords.longitude);
+  }, function(err){ console.warn('gps watch error',err); }, {enableHighAccuracy:true,maximumAge:15000,timeout:15000});
+}
+function stopWatchingMyGPS(){
+  if(_gpsWatchId!==null && navigator.geolocation){ navigator.geolocation.clearWatch(_gpsWatchId); _gpsWatchId=null; }
+}
+var _lastGpsPush=0;
+function pushMyLocation(lat,lng){
+  var now=Date.now();
+  if(now-_lastGpsPush<15000) return; // จำกัดความถี่การเขียนขึ้น cloud
+  _lastGpsPush=now;
+  var me=getCurrentMember(); var fam=getFamily(); if(!me||!fam||!fam.code) return;
+  initFirebase().then(function(ok){
+    if(!ok) return;
+    _fb.db.collection('families').doc(fam.code).collection('locations').doc(me.id).set({
+      lat:lat, lng:lng, name:me.name, updatedAt: Date.now()
+    }).catch(function(e){console.warn('push location error',e);});
+  });
+}
+function startWatchingOthersGPS(){
+  var fam=getFamily(); if(!fam||!fam.code) return;
+  initFirebase().then(function(ok){
+    if(!ok){ document.getElementById('gps-member-list').innerHTML='<div style="font-size:.72rem;color:var(--fg-m);text-align:center;padding:10px">ยังไม่ได้ตั้งค่า Firebase</div>'; return; }
+    if(_gpsUnsub) _gpsUnsub();
+    _gpsUnsub=_fb.db.collection('families').doc(fam.code).collection('locations')
+      .onSnapshot(function(snap){
+        var list=document.getElementById('gps-member-list');
+        if(snap.empty){ list.innerHTML='<div style="font-size:.72rem;color:var(--fg-m);text-align:center;padding:10px">ยังไม่มีใครแชร์ตำแหน่ง</div>'; return; }
+        list.innerHTML='';
+        snap.forEach(function(doc){
+          var d=doc.data();
+          var mins=Math.max(0,Math.round((Date.now()-(d.updatedAt||0))/60000));
+          var timeTxt = mins<1 ? 'อัปเดตเมื่อสักครู่' : ('อัปเดต '+mins+' นาทีที่แล้ว');
+          var row=document.createElement('div');
+          row.className='gps-member-row';
+          row.innerHTML='<div><div class="gps-m-name">'+d.name+'</div><div class="gps-m-time">'+timeTxt+'</div></div>'+
+            '<a class="gps-map-link" target="_blank" rel="noopener" href="https://www.google.com/maps?q='+d.lat+','+d.lng+'">เปิดแผนที่</a>';
+          list.appendChild(row);
+        });
+      }, function(err){ console.warn('gps listen error',err); });
+  });
+}
+// กลับมาเปิดแอปใหม่แล้วเคยเปิดแชร์ตำแหน่งไว้ ให้เริ่ม watch ต่ออัตโนมัติ
+function resumeGPSIfNeeded(){
+  if(isGPSSharing()) startWatchingMyGPS();
+  var navBtn=document.getElementById('nav-gps-btn'); if(navBtn) navBtn.classList.toggle('sharing',isGPSSharing());
+}
+
+// ============================================================
 // เริ่มต้น — แก้ปัญหาหน้าดำ
 // ============================================================
 function init(){
@@ -3251,6 +3559,7 @@ function init(){
     } else if(currentId && getMember(currentId)){
       state.currentUserId=currentId;
       navigate('main');
+      resumeGPSIfNeeded();
     } else {
       showLogin();
     }
