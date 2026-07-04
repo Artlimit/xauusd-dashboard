@@ -1217,12 +1217,13 @@ window._onWCConnected = async function(address, rawProvider) {
 };
 
 async function connectBitgetWallet() {
-  // รอ EIP-6963 announce ก่อน
-  await new Promise(function(r){ setTimeout(r, 200); });
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-  await new Promise(function(r){ setTimeout(r, 100); });
-
-  var raw = getBitgetProvider();
+  // รอ EIP-6963 announce ก่อน — poll ซ้ำหลายรอบ (ไม่ใช่รอครั้งเดียว) กันกรณี wallet announce ตัวเองช้า
+  var raw = null;
+  for (var tries = 0; tries < 8 && !raw; tries++) {
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    await new Promise(function(r){ setTimeout(r, 180); });
+    raw = getBitgetProvider();
+  }
 
   // มี provider อยู่แล้ว (extension หรือ in-app browser) — เชื่อมทันที
   if (raw) {
