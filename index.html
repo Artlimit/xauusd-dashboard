@@ -1234,15 +1234,22 @@ async function connectBitgetWallet() {
     return;
   }
 
-  // ไม่มี provider — เปิด WalletConnect modal
+  // ไม่มี provider ในเบราว์เซอร์ (ปกติถ้าเปิดจาก Chrome/Safari มือถือทั่วไปจะเป็นแบบนี้) — ใช้ WalletConnect modal แทน
+  // window._wcModal โหลดผ่าน ES module จาก CDN อาจยังไม่พร้อมทันที ให้รอสั้น ๆ ก่อนค่อยยอมแพ้ไปที่ deep link
+  if (!window._wcModal) {
+    for (var wcTries = 0; wcTries < 10 && !window._wcModal; wcTries++) {
+      await new Promise(function(r){ setTimeout(r, 200); });
+    }
+  }
   if (window._wcModal) {
     window._wcModal.open({ view: 'Connect' });
     _startWCFallbackWatcher();
     return;
   }
 
-  // fallback: deep link ไป Bitget
+  // fallback: deep link ไป Bitget (ใช้กรณีเปิดแอป Bitget บนมือถือโดยตรง)
   if (isMobileDevice()) {
+    toast('info', 'กำลังเปิด Bitget Wallet... ถ้าไม่มีแอปติดตั้งไว้ กรุณาโหลดแอป Bitget Wallet ก่อน');
     var url = window.location.href;
     window.location.href = 'bitkeep://bkconnect?action=dapp&url=' + encodeURIComponent(url);
     setTimeout(function(){
