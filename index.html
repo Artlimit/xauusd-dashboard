@@ -1107,6 +1107,7 @@
           <option value="above">ราคาขึ้นถึง (USD)</option>
           <option value="below">ราคาลงถึง (USD)</option>
           <option value="pct_up">ราคาขึ้น % จากตอนนี้</option>
+          <option value="pct_down">ราคาลง % จากตอนนี้</option>
         </select>
         <input class="w-input" id="agent-cond-value" type="number" placeholder="เช่น 65000 หรือ 5 (%)" style="margin-bottom:14px">
 
@@ -3626,7 +3627,12 @@ function openGPS(){
   }
   document.getElementById('modal-gps').classList.add('open');
 }
-function closeGPSOutside(e){ if(e.target===e.currentTarget) document.getElementById('modal-gps').classList.remove('open'); }
+function closeGPSOutside(e){
+  if(e.target===e.currentTarget){
+    document.getElementById('modal-gps').classList.remove('open');
+    if(_gpsUnsub){ _gpsUnsub(); _gpsUnsub=null; } // หยุด listener เรียลไทม์ตอนปิดหน้าต่าง ลดภาระเบื้องหลัง
+  }
+}
 function generateCodeForOldFamily(){
   var fam=getFamily();
   if(fam.code){ toast('info','ครอบครัวนี้มีรหัสอยู่แล้ว: '+fam.code); return; }
@@ -3895,6 +3901,7 @@ function agentCondLabel(w){
   var base;
   if(w.condType==='above') base='แจ้งเมื่อขึ้นถึง $'+w.condValue;
   else if(w.condType==='below') base='แจ้งเมื่อลงถึง $'+w.condValue;
+  else if(w.condType==='pct_down') base='แจ้งเมื่อลง '+w.condValue+'%';
   else base='แจ้งเมื่อขึ้น '+w.condValue+'%';
   if(w.reAlertOnReturn) base+=' · แจ้งซ้ำถ้ากลับมาอีก';
   return base;
@@ -4021,18 +4028,22 @@ function checkAgentAlerts(){
       _agentPriceCache[w.coin]=price;
       if(!w.basePrice){ w.basePrice=price; changed=true; }
 
-      var target = w.condType==='pct_up' ? (w.basePrice*(1+w.condValue/100)) : w.condValue;
-      var mainHit = w.condType==='below' ? (price<=target) : (price>=target);
+      var isDownward = (w.condType==='below' || w.condType==='pct_down');
+      var target;
+      if(w.condType==='pct_up') target = w.basePrice*(1+w.condValue/100);
+      else if(w.condType==='pct_down') target = w.basePrice*(1-w.condValue/100);
+      else target = w.condValue;
+      var mainHit = isDownward ? (price<=target) : (price>=target);
 
       if(mainHit && !w.triggered){
         w.triggered=true; changed=true;
-        var msg = w.condType==='below'
+        var msg = isDownward
           ? ('ราคาลงถึง $'+price.toFixed(4)+' (เป้าหมาย $'+target.toFixed(4)+')')
           : ('ราคาขึ้นถึง $'+price.toFixed(4)+' (เป้าหมาย $'+target.toFixed(4)+')');
         fireAgentAlert(w.coin, msg);
       } else if(!mainHit && w.triggered && w.reAlertOnReturn){
         var margin=Math.abs(target)*0.02;
-        var backOut = w.condType==='below' ? (price>target+margin) : (price<target-margin);
+        var backOut = isDownward ? (price>target+margin) : (price<target-margin);
         if(backOut){ w.triggered=false; changed=true; }
       }
 
