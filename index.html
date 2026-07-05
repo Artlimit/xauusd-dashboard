@@ -315,11 +315,13 @@
       box-shadow:0 4px 20px rgba(139,95,207,.4);cursor:pointer;border:none;transition:all .25s}
     .bn-center:hover{transform:scale(1.1) rotate(15deg);box-shadow:0 6px 28px rgba(139,95,207,.6)}
     @keyframes scanline{0%{top:15%}50%{top:85%}100%{top:15%}}
+    @keyframes camPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.75}}
 
     .modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(12px);
       z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;
       pointer-events:none;transition:opacity .3s}
     .modal-overlay.open{opacity:1;pointer-events:all}
+    .modal-overlay.open .sheet{transform:translateY(0)}
     .pin-modal{width:280px;text-align:center;position:relative}
     .pin-title{font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:800;margin-bottom:6px}
     .pin-sub{font-size:.75rem;color:var(--fg-m);margin-bottom:24px}
@@ -689,7 +691,10 @@
       <!-- Header -->
       <div style="padding:18px 20px 10px;display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem">📷 สแกน QR จ่าย USDC</div>
+          <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;display:flex;align-items:center;gap:7px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            สแกน QR จ่าย USDC
+          </div>
           <div style="font-size:.65rem;color:var(--fg-m);margin-top:2px">สแกน QR ของร้านค้าหรือผู้รับ</div>
         </div>
         <button onclick="closeScanPay()" style="background:rgba(255,255,255,.08);border:none;color:var(--fg-m);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1rem">✕</button>
@@ -698,6 +703,13 @@
       <!-- Camera viewfinder -->
       <div style="position:relative;margin:0 16px;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:1">
         <video id="scan-pay-video" style="width:100%;height:100%;object-fit:cover;display:block" playsinline autoplay muted></video>
+        <!-- Loading placeholder (แทนที่ไอคอน play สีดำเริ่มต้นของ browser ระหว่างรอกล้องเปิด) -->
+        <div id="scan-cam-loading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(160deg,#241238,#150a24)">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(139,95,207,.15);display:flex;align-items:center;justify-content:center;animation:camPulse 1.6s ease-in-out infinite">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--purple-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <div style="font-size:.68rem;color:var(--fg-m)">กำลังเปิดกล้อง...</div>
+        </div>
         <!-- Corner marks -->
         <div style="position:absolute;inset:0;pointer-events:none">
           <div style="position:absolute;top:16px;left:16px;width:28px;height:28px;border-top:3px solid var(--purple-light);border-left:3px solid var(--purple-light);border-radius:4px 0 0 0"></div>
@@ -1002,6 +1014,7 @@
       <div id="gps-code-section" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);display:none">
         <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">รหัสครอบครัว (ให้สมาชิกคนอื่นใช้เข้าร่วมจากมือถือของตัวเอง)</div>
         <div class="fam-code-box" id="gps-fam-code">------</div>
+        <button type="button" class="w-btn" id="gps-gen-code-btn" style="display:none;margin-top:10px" onclick="generateCodeForOldFamily()">สร้างรหัสให้ครอบครัวนี้</button>
       </div>
     </div>
   </div>
@@ -2349,10 +2362,12 @@ function openScanPay() {
 async function startCameraScan() {
   var video = document.getElementById('scan-pay-video');
   var noCam = document.getElementById('scan-no-cam');
+  var loading = document.getElementById('scan-cam-loading');
+  loading.style.display = 'flex';
 
   // BarcodeDetector API (Chrome 83+, Edge, Android WebView, Bitget in-app browser)
   if (!('BarcodeDetector' in window)) {
-    noCam.style.display = 'flex'; video.style.display = 'none'; return;
+    loading.style.display = 'none'; noCam.style.display = 'flex'; video.style.display = 'none'; return;
   }
   try {
     _scanStream = await navigator.mediaDevices.getUserMedia({
@@ -2361,6 +2376,7 @@ async function startCameraScan() {
     video.srcObject = _scanStream;
     video.style.display = 'block';
     noCam.style.display = 'none';
+    video.onloadedmetadata = function(){ loading.style.display = 'none'; };
 
     var detector = new BarcodeDetector({ formats: ['qr_code'] });
     var scan = async function() {
@@ -2383,6 +2399,7 @@ async function startCameraScan() {
     };
     _scanLoop = requestAnimationFrame(scan);
   } catch(e) {
+    loading.style.display = 'none';
     noCam.style.display = 'flex'; video.style.display = 'none';
   }
 }
@@ -2949,7 +2966,7 @@ function showFamilyInfo(){
   toast('info',fam.name+' — สมาชิก '+members.length+' คน สร้างเมื่อ '+d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()+codeMsg);
 }
 function confirmLogout(){
-  document.getElementById('confirm-icon').innerHTML='🚪';
+  document.getElementById('confirm-icon').innerHTML='<svg width="44" height="44" viewBox="0 0 24 24" stroke="var(--red)" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
   document.getElementById('confirm-title').textContent='ออกจากระบบ?';
   document.getElementById('confirm-msg').textContent='คุณจะกลับไปหน้าเลือกโปรไฟล์';
   var actionBtn=document.getElementById('confirm-action');
@@ -3455,6 +3472,7 @@ function openGPS(){
     document.getElementById('gps-owner-section').style.display='block';
     document.getElementById('gps-code-section').style.display='block';
     document.getElementById('gps-fam-code').textContent=fam.code||'ยังไม่มีรหัส';
+    document.getElementById('gps-gen-code-btn').style.display = fam.code ? 'none' : 'block';
     startWatchingOthersGPS();
   } else {
     document.getElementById('gps-owner-section').style.display='none';
@@ -3463,6 +3481,17 @@ function openGPS(){
   document.getElementById('modal-gps').classList.add('open');
 }
 function closeGPSOutside(e){ if(e.target===e.currentTarget) document.getElementById('modal-gps').classList.remove('open'); }
+function generateCodeForOldFamily(){
+  var fam=getFamily();
+  if(fam.code){ toast('info','ครอบครัวนี้มีรหัสอยู่แล้ว: '+fam.code); return; }
+  var code=genFamilyCode();
+  fam.code=code;
+  save(KEYS.family,fam);
+  pushFamilyToCloud();
+  document.getElementById('gps-fam-code').textContent=code;
+  document.getElementById('gps-gen-code-btn').style.display='none';
+  toast('success','สร้างรหัสครอบครัวสำเร็จ: '+code);
+}
 function updateGPSToggleUI(sharing){
   var tg=document.getElementById('gps-my-toggle');
   tg.classList.toggle('on',sharing);
