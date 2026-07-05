@@ -534,6 +534,7 @@
     <p style="font-size:.68rem;color:var(--fg-m);max-width:280px;text-align:center;line-height:1.5">
       ข้อมูลทั้งหมดเก็บในเครื่องนี้เท่านั้น ไม่ส่งออกภายนอก
     </p>
+    <button type="button" class="w-link-btn" onclick="confirmResetApp()">ลืม PIN? รีเซ็ตเริ่มใหม่</button>
   </div>
 
   <div class="screen main-screen" id="scr-main">
@@ -3102,6 +3103,24 @@ function confirmLogout(){
   document.getElementById('modal-confirm').classList.add('open');
 }
 function closeConfirm(){document.getElementById('modal-confirm').classList.remove('open');}
+
+function confirmResetApp(){
+  document.getElementById('confirm-icon').innerHTML='<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+  document.getElementById('confirm-title').textContent='รีเซ็ตแอปทั้งหมด?';
+  document.getElementById('confirm-msg').textContent='ข้อมูลครอบครัว สมาชิก ยอดเงิน และประวัติทั้งหมดในเครื่องนี้จะถูกลบถาวร กู้คืนไม่ได้ (เว้นแต่มีไฟล์ Backup เก็บไว้)';
+  var actionBtn=document.getElementById('confirm-action');
+  actionBtn.textContent='ลบทั้งหมดและเริ่มใหม่'; actionBtn.className='cb-danger';
+  actionBtn.onclick=function(){
+    closeConfirm();
+    try{ stopWatchingMyGPS(); }catch(e){}
+    try{ stopAgentPolling(); }catch(e){}
+    if(typeof _gpsUnsub!=='undefined' && _gpsUnsub){ _gpsUnsub(); _gpsUnsub=null; }
+    Object.keys(localStorage).forEach(function(k){ if(k.indexOf('pp_')===0) localStorage.removeItem(k); });
+    toast('success','รีเซ็ตข้อมูลเรียบร้อย กำลังโหลดหน้าใหม่...');
+    setTimeout(function(){ location.reload(); }, 900);
+  };
+  document.getElementById('modal-confirm').classList.add('open');
+}
 
 // ============================================================
 // แปล error ดิบจาก wallet/RPC ให้เป็นข้อความไทยที่เข้าใจง่าย
