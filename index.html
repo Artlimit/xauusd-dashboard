@@ -314,6 +314,29 @@
     .bn-item.active{color:var(--purple-light)}
     .bn-item.active svg{transform:scale(1.15);filter:drop-shadow(0 0 6px rgba(139,95,207,.5))}
     .bn-item:hover:not(.active){color:var(--fg)}
+
+    /* Agent FAB */
+    .agent-fab{position:absolute;right:16px;bottom:96px;z-index:60;width:52px;height:52px;border-radius:50%;
+      background:linear-gradient(135deg,#34d399,#22c1a3);box-shadow:0 6px 18px rgba(52,211,153,.4);
+      display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;transition:transform .2s}
+    .agent-fab:active{transform:scale(.92)}
+    .agent-fab .badge{position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;
+      background:var(--pink);color:white;font-size:.6rem;font-weight:800;display:flex;align-items:center;justify-content:center;
+      border:2px solid var(--bg);display:none}
+    .agent-watch-row{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--border)}
+    .agent-watch-row:last-child{border-bottom:none}
+    .agent-coin-icon{width:36px;height:36px;border-radius:50%;background:rgba(52,211,153,.15);
+      display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;color:var(--green);flex-shrink:0}
+    .agent-w-name{font-size:.85rem;font-weight:700}
+    .agent-w-cond{font-size:.65rem;color:var(--fg-m)}
+    .agent-w-price{font-size:.78rem;font-weight:700;margin-left:auto;text-align:right}
+    .agent-w-del{color:var(--red);font-size:.68rem;background:none;border:none;padding:6px;cursor:pointer}
+    .agent-empty{text-align:center;padding:30px 10px;color:var(--fg-m);font-size:.75rem}
+    .agent-budget-box{background:linear-gradient(135deg,rgba(52,211,153,.12),rgba(139,95,207,.12));
+      border:1px solid var(--border);border-radius:14px;padding:12px 16px;text-align:center;margin-bottom:14px;cursor:pointer}
+    .agent-tier-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .agent-tier-row input{flex:1;min-width:0}
+    .agent-tier-del{background:none;border:none;color:var(--red);font-size:1rem;cursor:pointer;padding:4px 8px;flex-shrink:0}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -1024,6 +1047,94 @@
     </div>
   </div>
 
+  <!-- Agent Modal -->
+  <div class="sheet-overlay" id="modal-agent" onclick="closeAgentOutside(event)">
+    <div class="sheet" style="max-height:88vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">📈 เอเจนต์ติดตามราคา</div>
+
+      <div id="agent-list-view">
+        <p style="font-size:.65rem;color:var(--fg-m);text-align:center;margin-bottom:12px">
+          ตั้งราคาเป้าหมาย แล้วแอปจะแจ้งเตือนให้ — ไปกดซื้อ/ขายเองในแอปกระเป๋าของคุณ
+        </p>
+        <div class="agent-budget-box" id="agent-budget-box" onclick="openAgentBudgetEdit()">
+          <div style="font-size:.65rem;color:var(--fg-m)">งบลงทุนคงเหลือ</div>
+          <div style="font-size:1.2rem;font-weight:800" id="agent-budget-remain">0.00 USDC</div>
+          <div style="font-size:.6rem;color:var(--purple-light)" id="agent-budget-total-lbl">แตะเพื่อตั้ง/แก้ไขงบลงทุนทั้งหมด</div>
+        </div>
+        <div id="agent-budget-edit" style="display:none;margin-bottom:12px">
+          <input class="w-input" id="agent-budget-input" type="number" placeholder="งบลงทุนทั้งหมด (USDC)" style="margin-bottom:8px">
+          <div style="display:flex;gap:8px">
+            <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="closeAgentBudgetEdit()">ยกเลิก</button>
+            <button type="button" class="w-btn" onclick="saveAgentBudget()">บันทึกงบ</button>
+          </div>
+        </div>
+
+        <div id="agent-watch-list">
+          <div class="agent-empty">ยังไม่มีเหรียญที่เฝ้าราคาอยู่<br>กด "+ เพิ่มเหรียญ" ด้านล่างเพื่อเริ่มต้น</div>
+        </div>
+        <button type="button" class="w-btn" style="margin-top:14px" onclick="showAgentAddForm()">＋ เพิ่มเหรียญที่ต้องการเฝ้า</button>
+        <button type="button" class="w-link-btn" style="display:block;text-align:center;width:100%;margin-top:12px" onclick="showAgentHistory()">🕑 ดูประวัติการแจ้งเตือน</button>
+      </div>
+
+      <div id="agent-history-view" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:.85rem;font-weight:800">ประวัติการแจ้งเตือน</div>
+          <button type="button" onclick="clearAgentHistory()" style="background:none;border:none;color:var(--red);font-size:.68rem;cursor:pointer">ล้างประวัติ</button>
+        </div>
+        <div id="agent-history-list"></div>
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentHistory()">‹ กลับ</button>
+      </div>
+
+      <div id="agent-add-view" style="display:none">
+        <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">เลือกเหรียญ</div>
+        <select class="w-input" id="agent-coin-select" style="margin-bottom:12px">
+          <option value="bitcoin">Bitcoin (BTC)</option>
+          <option value="ethereum">Ethereum (ETH)</option>
+          <option value="binancecoin">BNB</option>
+          <option value="solana">Solana (SOL)</option>
+          <option value="ripple">XRP</option>
+          <option value="dogecoin">Dogecoin (DOGE)</option>
+          <option value="cardano">Cardano (ADA)</option>
+          <option value="tron">Tron (TRX)</option>
+          <option value="__custom">อื่น ๆ (ระบุ CoinGecko ID เอง)</option>
+        </select>
+        <input class="w-input" id="agent-coin-custom" placeholder="เช่น pepe, near, arbitrum" style="display:none;margin-bottom:12px">
+
+        <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">เงื่อนไขแจ้งเตือนหลัก</div>
+        <select class="w-input" id="agent-cond-type" style="margin-bottom:12px">
+          <option value="above">ราคาขึ้นถึง (USD)</option>
+          <option value="below">ราคาลงถึง (USD)</option>
+          <option value="pct_up">ราคาขึ้น % จากตอนนี้</option>
+        </select>
+        <input class="w-input" id="agent-cond-value" type="number" placeholder="เช่น 65000 หรือ 5 (%)" style="margin-bottom:14px">
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--fg-m);margin-bottom:16px;cursor:pointer">
+          <input type="checkbox" id="agent-realert" style="width:16px;height:16px">
+          แจ้งเตือนซ้ำถ้าราคากลับเข้าโซนกำไรอีกครั้ง (หลังจากที่เคยตกลงมาแล้ว)
+        </label>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <div style="font-size:.72rem;color:var(--fg-m)">จัดสรรเงินลงทุนให้เหรียญนี้</div>
+          <div style="font-size:.85rem;font-weight:800" id="agent-alloc-display">0 USDC</div>
+        </div>
+        <input type="range" id="agent-alloc-slider" min="0" max="0" step="1" value="0" style="width:100%;margin-bottom:4px" oninput="onAgentAllocSlide()">
+        <div style="font-size:.6rem;color:var(--fg-m);margin-bottom:16px" id="agent-alloc-remain-lbl">คงเหลือในกองทุน: 0 USDC</div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:.72rem;color:var(--fg-m)">ระดับขายทำกำไร (ตั้งได้หลายระดับ)</div>
+          <button type="button" onclick="addAgentTierRow()" style="background:none;border:none;color:var(--purple-light);font-size:.68rem;cursor:pointer">＋ เพิ่มระดับ</button>
+        </div>
+        <div id="agent-tiers-list" style="margin-bottom:16px"></div>
+
+        <div style="display:flex;gap:10px">
+          <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAgentAddForm()">ยกเลิก</button>
+          <button type="button" class="w-btn" onclick="submitAgentWatch()">บันทึก</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Backup Modal -->
   <div class="sheet-overlay" id="modal-backup" onclick="closeBackupOutside(event)">
     <div class="sheet">
@@ -1073,6 +1184,11 @@
       <button class="s-btn" onclick="doTopUp()">＋ เติมเงิน</button>
     </div>
   </div>
+
+  <button type="button" class="agent-fab" id="agent-fab" onclick="openAgent()" title="เอเจนต์ติดตามราคา" style="display:none">
+    <span class="badge" id="agent-fab-badge">!</span>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+  </button>
 
   <nav class="bot-nav" id="bot-nav" style="display:none">
     <button class="bn-item active" data-tab="main" onclick="navigate('main')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>หน้าแรก</span></button>
@@ -1875,6 +1991,7 @@ function navigate(screenId) {
   if(scr){scr.classList.add('active','screen-fade-in');}
   var navScreens=['main','history','family','profile'];
   document.getElementById('bot-nav').style.display=navScreens.includes(screenId)?'flex':'none';
+  var fab=document.getElementById('agent-fab'); if(fab) fab.style.display=(screenId==='main')?'flex':'none';
   document.querySelectorAll('.bn-item').forEach(function(b){b.classList.toggle('active',b.dataset.tab===screenId);});
   if(screenId==='main')renderMain();
   if(screenId==='history')renderHistory();
@@ -2096,6 +2213,7 @@ function startPinCheck(memberId){
       }
       navigate('main');
       resumeGPSIfNeeded();
+      startAgentPolling();
       if(connectedWalletAddress) setTimeout(startAutoRefresh,800);
     } else {
       pinError();toast('error','PIN ไม่ถูกต้อง');
@@ -2980,7 +3098,7 @@ function confirmLogout(){
   document.getElementById('confirm-msg').textContent='คุณจะกลับไปหน้าเลือกโปรไฟล์';
   var actionBtn=document.getElementById('confirm-action');
   actionBtn.textContent='ออกจากระบบ';actionBtn.className='cb-danger';
-  actionBtn.onclick=function(){closeConfirm();stopWatchingMyGPS();if(_gpsUnsub){_gpsUnsub();_gpsUnsub=null;}state.currentUserId=null;save(KEYS.current,null);showLogin();};
+  actionBtn.onclick=function(){closeConfirm();stopWatchingMyGPS();stopAgentPolling();if(_gpsUnsub){_gpsUnsub();_gpsUnsub=null;}state.currentUserId=null;save(KEYS.current,null);showLogin();};
   document.getElementById('modal-confirm').classList.add('open');
 }
 function closeConfirm(){document.getElementById('modal-confirm').classList.remove('open');}
@@ -3591,6 +3709,340 @@ function resumeGPSIfNeeded(){
 }
 
 // ============================================================
+// เอเจนต์ติดตามราคา (Agent) — โครง UI + การตั้งค่ากลยุทธ์ (ยังไม่ดึงราคาจริง)
+// ============================================================
+var AGENT_COIN_LABELS={bitcoin:'BTC',ethereum:'ETH',binancecoin:'BNB',solana:'SOL',ripple:'XRP',dogecoin:'DOGE',cardano:'ADA',tron:'TRX'};
+function agentKey(){ var m=getCurrentMember(); return m?('pp_agent_'+m.id):'pp_agent_none'; }
+function agentBudgetKey(){ var m=getCurrentMember(); return m?('pp_agent_budget_'+m.id):'pp_agent_budget_none'; }
+function getAgentWatches(){ return load(agentKey(),[]); }
+function saveAgentWatches(list){ save(agentKey(),list); }
+function getAgentBudget(){ return load(agentBudgetKey(),0); }
+function getAgentAllocatedTotal(){ return getAgentWatches().reduce(function(s,w){return s+(w.allocated||0);},0); }
+function getAgentRemainingBudget(){ return Math.max(0, getAgentBudget()-getAgentAllocatedTotal()); }
+
+function openAgent(){
+  document.getElementById('agent-list-view').style.display='block';
+  document.getElementById('agent-add-view').style.display='none';
+  document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-budget-edit').style.display='none';
+  renderAgentList();
+  updateAgentBudgetDisplay();
+  document.getElementById('modal-agent').classList.add('open');
+  startAgentPolling();
+  maybeAskAgentNotifyPermission();
+}
+function closeAgentOutside(e){ if(e.target===e.currentTarget) document.getElementById('modal-agent').classList.remove('open'); }
+
+function updateAgentBudgetDisplay(){
+  var budget=getAgentBudget();
+  var remain=getAgentRemainingBudget();
+  document.getElementById('agent-budget-remain').textContent=remain.toFixed(2)+' USDC';
+  document.getElementById('agent-budget-total-lbl').textContent = budget>0
+    ? ('จากงบทั้งหมด '+budget.toFixed(2)+' USDC — แตะเพื่อแก้ไข')
+    : 'แตะเพื่อตั้งงบลงทุนทั้งหมด';
+}
+function openAgentBudgetEdit(){
+  document.getElementById('agent-budget-input').value=getAgentBudget()||'';
+  document.getElementById('agent-budget-edit').style.display='block';
+}
+function closeAgentBudgetEdit(){ document.getElementById('agent-budget-edit').style.display='none'; }
+function saveAgentBudget(){
+  var v=parseFloat(document.getElementById('agent-budget-input').value);
+  if(!v || v<0){ toast('error','กรุณากรอกงบลงทุนให้ถูกต้อง'); return; }
+  var allocated=getAgentAllocatedTotal();
+  if(v<allocated){ toast('error','งบใหม่น้อยกว่าที่จัดสรรไปแล้ว ('+allocated.toFixed(2)+' USDC) กรุณาลบบางรายการก่อน'); return; }
+  save(agentBudgetKey(),v);
+  closeAgentBudgetEdit();
+  updateAgentBudgetDisplay();
+  toast('success','ตั้งงบลงทุนแล้ว: '+v.toFixed(2)+' USDC');
+}
+
+var _agentEditingId=null;
+function showAgentAddForm(editId){
+  _agentEditingId = editId || null;
+  document.getElementById('agent-list-view').style.display='none';
+  document.getElementById('agent-add-view').style.display='block';
+  document.getElementById('agent-coin-custom').style.display='none';
+  document.getElementById('agent-coin-custom').value='';
+  document.getElementById('agent-cond-value').value='';
+  document.getElementById('agent-realert').checked=false;
+  document.getElementById('agent-tiers-list').innerHTML='';
+
+  var editing = _agentEditingId ? getAgentWatches().find(function(w){return w.id===_agentEditingId;}) : null;
+  var ownAllocated = editing ? (editing.allocated||0) : 0;
+  var remain = getAgentRemainingBudget() + ownAllocated; // ไม่หักเงินของตัวเองตอนแก้ไข
+
+  var sel=document.getElementById('agent-coin-select');
+  var slider=document.getElementById('agent-alloc-slider');
+  slider.max=remain;
+
+  if(editing){
+    var isPreset = !!AGENT_COIN_LABELS[editing.coin];
+    sel.value = isPreset ? editing.coin : '__custom';
+    document.getElementById('agent-coin-custom').style.display = isPreset ? 'none' : 'block';
+    document.getElementById('agent-coin-custom').value = isPreset ? '' : editing.coin;
+    document.getElementById('agent-cond-type').value = editing.condType;
+    document.getElementById('agent-cond-value').value = editing.condValue;
+    document.getElementById('agent-realert').checked = !!editing.reAlertOnReturn;
+    slider.value = ownAllocated;
+    (editing.tiers||[]).forEach(function(t){ addAgentTierRow(t.gainPct,t.sellPct); });
+  } else {
+    sel.value='bitcoin';
+    slider.value=0;
+  }
+  onAgentAllocSlide();
+  if(remain<=0 && !editing){ document.getElementById('agent-alloc-remain-lbl').innerHTML='<span style="color:var(--yellow)">งบลงทุนเต็มแล้ว — ตั้งงบเพิ่มได้ที่หน้าหลักของเอเจนต์ ถ้าไม่ตั้งงบ ระบบจะแจ้งเตือนอย่างเดียวโดยไม่จัดสรรเงิน</span>'; }
+}
+function hideAgentAddForm(){
+  _agentEditingId=null;
+  document.getElementById('agent-list-view').style.display='block';
+  document.getElementById('agent-add-view').style.display='none';
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var sel=document.getElementById('agent-coin-select');
+  if(sel){ sel.addEventListener('change', function(){
+    document.getElementById('agent-coin-custom').style.display = (sel.value==='__custom') ? 'block' : 'none';
+  }); }
+});
+function onAgentAllocSlide(){
+  var slider=document.getElementById('agent-alloc-slider');
+  var v=parseFloat(slider.value)||0;
+  document.getElementById('agent-alloc-display').textContent=v.toFixed(2)+' USDC';
+  var editing = _agentEditingId ? getAgentWatches().find(function(w){return w.id===_agentEditingId;}) : null;
+  var ownAllocated = editing ? (editing.allocated||0) : 0;
+  var remain = (getAgentRemainingBudget()+ownAllocated) - v;
+  document.getElementById('agent-alloc-remain-lbl').textContent='คงเหลือในกองทุนหลังจัดสรร: '+Math.max(0,remain).toFixed(2)+' USDC';
+}
+function addAgentTierRow(gainVal,sellVal){
+  var wrap=document.getElementById('agent-tiers-list');
+  var row=document.createElement('div');
+  row.className='agent-tier-row';
+  row.innerHTML='<input class="w-input" type="number" placeholder="ขึ้น % เช่น 20" value="'+(gainVal||'')+'" data-role="gain">'+
+    '<input class="w-input" type="number" placeholder="ขายกี่ % เช่น 25" value="'+(sellVal||'')+'" data-role="sell">'+
+    '<button type="button" class="agent-tier-del" onclick="this.parentElement.remove()">✕</button>';
+  wrap.appendChild(row);
+}
+function submitAgentWatch(){
+  var sel=document.getElementById('agent-coin-select');
+  var coinId = sel.value==='__custom' ? document.getElementById('agent-coin-custom').value.trim().toLowerCase() : sel.value;
+  var condType=document.getElementById('agent-cond-type').value;
+  var condValue=parseFloat(document.getElementById('agent-cond-value').value);
+  var reAlert=document.getElementById('agent-realert').checked;
+  var allocated=parseFloat(document.getElementById('agent-alloc-slider').value)||0;
+  if(!coinId){ toast('error','กรุณาระบุเหรียญที่ต้องการเฝ้า'); return; }
+  if(!condValue || condValue<=0){ toast('error','กรุณากรอกค่าเป้าหมายให้ถูกต้อง'); return; }
+
+  var list=getAgentWatches();
+  var editing = _agentEditingId ? list.find(function(w){return w.id===_agentEditingId;}) : null;
+  var ownAllocated = editing ? (editing.allocated||0) : 0;
+  if(allocated>(getAgentRemainingBudget()+ownAllocated)){ toast('error','เงินที่จัดสรรเกินงบคงเหลือ'); return; }
+
+  var tiers=[];
+  document.querySelectorAll('#agent-tiers-list .agent-tier-row').forEach(function(row){
+    var gain=parseFloat(row.querySelector('[data-role="gain"]').value);
+    var sellPct=parseFloat(row.querySelector('[data-role="sell"]').value);
+    if(gain>0 && sellPct>0) tiers.push({gainPct:gain, sellPct:sellPct});
+  });
+
+  if(editing){
+    editing.coin=coinId; editing.condType=condType; editing.condValue=condValue;
+    editing.allocated=allocated; editing.tiers=tiers; editing.reAlertOnReturn=reAlert;
+    editing.triggered=false; editing.triggeredTiers=[]; // เปลี่ยนเงื่อนไขแล้ว รีเซ็ตสถานะแจ้งเตือน
+    saveAgentWatches(list);
+    toast('success','แก้ไขรายการเฝ้าราคาแล้ว');
+  } else {
+    list.push({
+      id: uid(), coin: coinId, condType: condType, condValue: condValue,
+      allocated: allocated, tiers: tiers, reAlertOnReturn: reAlert,
+      createdAt: Date.now(), triggered:false, triggeredTiers:[]
+    });
+    saveAgentWatches(list);
+    toast('success','เพิ่มรายการเฝ้าราคาแล้ว');
+  }
+  hideAgentAddForm();
+  renderAgentList();
+  updateAgentBudgetDisplay();
+  startAgentPolling();
+  checkAgentAlerts();
+}
+function deleteAgentWatch(id){
+  var list=getAgentWatches().filter(function(w){return w.id!==id;});
+  saveAgentWatches(list);
+  renderAgentList();
+  updateAgentBudgetDisplay();
+  if(list.length===0) stopAgentPolling();
+}
+function agentCondLabel(w){
+  var base;
+  if(w.condType==='above') base='แจ้งเมื่อขึ้นถึง $'+w.condValue;
+  else if(w.condType==='below') base='แจ้งเมื่อลงถึง $'+w.condValue;
+  else base='แจ้งเมื่อขึ้น '+w.condValue+'%';
+  if(w.reAlertOnReturn) base+=' · แจ้งซ้ำถ้ากลับมาอีก';
+  return base;
+}
+function agentTierSummary(w){
+  if(!w.tiers || w.tiers.length===0) return '';
+  return w.tiers.map(function(t){ return 'ขาย '+t.sellPct+'%@+'+t.gainPct+'%'; }).join(', ');
+}
+function renderAgentList(){
+  var list=getAgentWatches();
+  var box=document.getElementById('agent-watch-list');
+  if(list.length===0){
+    box.innerHTML='<div class="agent-empty">ยังไม่มีเหรียญที่เฝ้าราคาอยู่<br>กด "+ เพิ่มเหรียญ" ด้านล่างเพื่อเริ่มต้น</div>';
+    return;
+  }
+  box.innerHTML='';
+  list.forEach(function(w){
+    var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
+    var tierSummary=agentTierSummary(w);
+    var priceTxt = (typeof _agentPriceCache[w.coin]==='number') ? ('$'+_agentPriceCache[w.coin].toFixed(4)) : '—';
+    var row=document.createElement('div');
+    row.className='agent-watch-row';
+    row.style.flexWrap='wrap';
+    row.innerHTML='<div class="agent-coin-icon">'+label.slice(0,4)+'</div>'+
+      '<div style="flex:1;min-width:0"><div class="agent-w-name">'+label+
+        (w.allocated>0?' · '+w.allocated.toFixed(2)+' USDC':'')+
+        ' <span style="color:var(--fg-m);font-weight:600">'+priceTxt+'</span></div>'+
+        '<div class="agent-w-cond">'+agentCondLabel(w)+'</div>'+
+        (tierSummary?'<div class="agent-w-cond" style="color:var(--green)">'+tierSummary+'</div>':'')+
+      '</div>'+
+      '<button type="button" class="agent-w-del" style="color:var(--purple-light)" onclick="showAgentAddForm(\''+w.id+'\')">แก้ไข</button>'+
+      '<button type="button" class="agent-w-del" onclick="deleteAgentWatch(\''+w.id+'\')">ลบ</button>';
+    box.appendChild(row);
+  });
+}
+
+function agentHistoryKey(){ var m=getCurrentMember(); return m?('pp_agent_history_'+m.id):'pp_agent_history_none'; }
+function getAgentHistory(){ return load(agentHistoryKey(),[]); }
+function logAgentAlert(coinLabel, message){
+  var hist=getAgentHistory();
+  hist.unshift({ id: uid(), coin: coinLabel, message: message, ts: Date.now() });
+  if(hist.length>50) hist=hist.slice(0,50); // เก็บแค่ 50 รายการล่าสุด กันข้อมูลบวมไม่มีที่สิ้นสุด
+  save(agentHistoryKey(),hist);
+}
+function showAgentHistory(){
+  document.getElementById('agent-list-view').style.display='none';
+  document.getElementById('agent-add-view').style.display='none';
+  document.getElementById('agent-history-view').style.display='block';
+  renderAgentHistory();
+}
+function hideAgentHistory(){
+  document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-list-view').style.display='block';
+}
+function clearAgentHistory(){
+  save(agentHistoryKey(),[]);
+  renderAgentHistory();
+  toast('info','ล้างประวัติการแจ้งเตือนแล้ว');
+}
+function agentTimeAgo(ts){
+  var mins=Math.max(0,Math.round((Date.now()-ts)/60000));
+  if(mins<1) return 'เมื่อสักครู่';
+  if(mins<60) return mins+' นาทีที่แล้ว';
+  var hrs=Math.round(mins/60);
+  if(hrs<24) return hrs+' ชั่วโมงที่แล้ว';
+  var days=Math.round(hrs/24);
+  return days+' วันที่แล้ว';
+}
+function renderAgentHistory(){
+  var hist=getAgentHistory();
+  var box=document.getElementById('agent-history-list');
+  if(hist.length===0){
+    box.innerHTML='<div class="agent-empty">ยังไม่มีประวัติการแจ้งเตือน</div>';
+    return;
+  }
+  box.innerHTML='';
+  hist.forEach(function(h){
+    var row=document.createElement('div');
+    row.className='agent-watch-row';
+    row.innerHTML='<div class="agent-coin-icon">'+(AGENT_COIN_LABELS[h.coin]||h.coin||'?').toString().slice(0,4)+'</div>'+
+      '<div><div class="agent-w-name">'+(AGENT_COIN_LABELS[h.coin]||h.coin)+'</div>'+
+      '<div class="agent-w-cond">'+h.message+'</div>'+
+      '<div class="agent-w-cond" style="opacity:.7">'+agentTimeAgo(h.ts)+'</div></div>';
+    box.appendChild(row);
+  });
+}
+
+// ============================================================
+// เอเจนต์ — ดึงราคาจริงจาก CoinGecko + ตรวจสอบเงื่อนไขแจ้งเตือนจริง
+// ============================================================
+var _agentPriceCache={}; // coinId -> ราคาล่าสุดที่ดึงได้ (ใช้แสดงผลเฉยๆ ไม่ persist)
+function fetchCoinPrices(ids){
+  if(!ids || !ids.length) return Promise.resolve({});
+  var url='https://api.coingecko.com/api/v3/simple/price?ids='+encodeURIComponent(ids.join(','))+'&vs_currencies=usd';
+  return fetch(url).then(function(r){ if(!r.ok) throw new Error('coingecko '+r.status); return r.json(); })
+    .catch(function(e){ console.warn('ดึงราคาเหรียญไม่สำเร็จ',e); return {}; });
+}
+function fireAgentAlert(coinId, message){
+  var label=AGENT_COIN_LABELS[coinId]||coinId.toUpperCase();
+  toast('success','📈 '+label+': '+message);
+  logAgentAlert(coinId, message);
+  if('Notification' in window && Notification.permission==='granted'){
+    try{ new Notification('เอเจนต์ติดตามราคา — '+label, {body:message}); }catch(e){}
+  }
+}
+function checkAgentAlerts(){
+  var list=getAgentWatches();
+  if(!list.length) return;
+  var ids=[]; list.forEach(function(w){ if(ids.indexOf(w.coin)<0) ids.push(w.coin); });
+  fetchCoinPrices(ids).then(function(prices){
+    var changed=false;
+    list.forEach(function(w){
+      var priceObj=prices[w.coin];
+      if(!priceObj || typeof priceObj.usd!=='number') return;
+      var price=priceObj.usd;
+      _agentPriceCache[w.coin]=price;
+      if(!w.basePrice){ w.basePrice=price; changed=true; }
+
+      var target = w.condType==='pct_up' ? (w.basePrice*(1+w.condValue/100)) : w.condValue;
+      var mainHit = w.condType==='below' ? (price<=target) : (price>=target);
+
+      if(mainHit && !w.triggered){
+        w.triggered=true; changed=true;
+        var msg = w.condType==='below'
+          ? ('ราคาลงถึง $'+price.toFixed(4)+' (เป้าหมาย $'+target.toFixed(4)+')')
+          : ('ราคาขึ้นถึง $'+price.toFixed(4)+' (เป้าหมาย $'+target.toFixed(4)+')');
+        fireAgentAlert(w.coin, msg);
+      } else if(!mainHit && w.triggered && w.reAlertOnReturn){
+        var margin=Math.abs(target)*0.02;
+        var backOut = w.condType==='below' ? (price>target+margin) : (price<target-margin);
+        if(backOut){ w.triggered=false; changed=true; }
+      }
+
+      (w.tiers||[]).forEach(function(t,idx){
+        var tierTarget=w.basePrice*(1+t.gainPct/100);
+        var already=(w.triggeredTiers||[]).indexOf(idx)>=0;
+        if(price>=tierTarget && !already){
+          w.triggeredTiers=w.triggeredTiers||[];
+          w.triggeredTiers.push(idx);
+          changed=true;
+          fireAgentAlert(w.coin, 'ถึงระดับขาย '+t.sellPct+'% ที่ +'+t.gainPct+'% (ราคา $'+price.toFixed(4)+')');
+        }
+      });
+    });
+    if(changed) saveAgentWatches(list);
+    var modalOpen=document.getElementById('modal-agent').classList.contains('open');
+    var listShown=document.getElementById('agent-list-view').style.display!=='none';
+    if(modalOpen && listShown) renderAgentList();
+  });
+}
+var _agentPollInterval=null;
+function startAgentPolling(){
+  if(_agentPollInterval) return;
+  if(getAgentWatches().length===0) return;
+  checkAgentAlerts();
+  _agentPollInterval=setInterval(checkAgentAlerts, 90000); // ทุก 90 วิ กัน rate limit ของ CoinGecko แพลนฟรี
+}
+function stopAgentPolling(){
+  if(_agentPollInterval){ clearInterval(_agentPollInterval); _agentPollInterval=null; }
+}
+function maybeAskAgentNotifyPermission(){
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
+}
+
+// ============================================================
 // เริ่มต้น — แก้ปัญหาหน้าดำ
 // ============================================================
 function init(){
@@ -3609,6 +4061,7 @@ function init(){
       state.currentUserId=currentId;
       navigate('main');
       resumeGPSIfNeeded();
+      startAgentPolling();
     } else {
       showLogin();
     }
