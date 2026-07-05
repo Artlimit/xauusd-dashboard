@@ -337,6 +337,15 @@
     .agent-tier-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
     .agent-tier-row input{flex:1;min-width:0}
     .agent-tier-del{background:none;border:none;color:var(--red);font-size:1rem;cursor:pointer;padding:4px 8px;flex-shrink:0}
+    .agent-port-row{margin-bottom:14px}
+    .agent-port-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+    .agent-port-bar-bg{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+    .agent-port-bar-fill{height:100%;border-radius:999px}
+    .coin-pick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .coin-pick-card{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 4px;
+      background:var(--bg-card);border:1px solid var(--border);border-radius:14px;cursor:pointer;transition:border-color .15s}
+    .coin-pick-card.selected{border-color:var(--purple-light);background:rgba(139,95,207,.15)}
+    .coin-pick-card:active{transform:scale(.96)}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -1076,6 +1085,7 @@
         </div>
         <button type="button" class="w-btn" style="margin-top:14px" onclick="showAgentAddForm()">＋ เพิ่มเหรียญที่ต้องการเฝ้า</button>
         <button type="button" class="w-link-btn" style="display:block;text-align:center;width:100%;margin-top:12px" onclick="showAgentHistory()">🕑 ดูประวัติการแจ้งเตือน</button>
+        <button type="button" class="w-link-btn" style="display:block;text-align:center;width:100%;margin-top:6px" onclick="showAgentPortfolio()">📊 สรุปพอร์ตการถือครอง</button>
       </div>
 
       <div id="agent-history-view" style="display:none">
@@ -1087,20 +1097,27 @@
         <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentHistory()">‹ กลับ</button>
       </div>
 
+      <div id="agent-portfolio-view" style="display:none">
+        <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">สรุปพอร์ตการถือครอง</div>
+        <p style="font-size:.62rem;color:var(--fg-m);line-height:1.5;margin-bottom:12px">
+          คำนวณจากจำนวนเหรียญโดยประมาณ (เงินที่จัดสรร ÷ ราคาตอนเพิ่มรายการ) คูณราคาตลาดปัจจุบัน — เป็นตัวเลขประมาณการเพื่อวางแผน ไม่ใช่ยอดถือครองจริงในกระเป๋า
+        </p>
+        <div class="agent-budget-box" style="cursor:default;margin-bottom:14px">
+          <div style="font-size:.65rem;color:var(--fg-m)">มูลค่าพอร์ตรวมตอนนี้ (โดยประมาณ)</div>
+          <div style="font-size:1.2rem;font-weight:800" id="agent-portfolio-total">0.00 USDC</div>
+        </div>
+        <div id="agent-portfolio-list"></div>
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentPortfolio()">‹ กลับ</button>
+      </div>
+
       <div id="agent-add-view" style="display:none">
         <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">เลือกเหรียญ</div>
-        <select class="w-input" id="agent-coin-select" style="margin-bottom:12px">
-          <option value="bitcoin">Bitcoin (BTC)</option>
-          <option value="ethereum">Ethereum (ETH)</option>
-          <option value="binancecoin">BNB</option>
-          <option value="solana">Solana (SOL)</option>
-          <option value="ripple">XRP</option>
-          <option value="dogecoin">Dogecoin (DOGE)</option>
-          <option value="cardano">Cardano (ADA)</option>
-          <option value="tron">Tron (TRX)</option>
-          <option value="__custom">อื่น ๆ (ระบุ CoinGecko ID เอง)</option>
-        </select>
-        <input class="w-input" id="agent-coin-custom" placeholder="เช่น pepe, near, arbitrum" style="display:none;margin-bottom:12px">
+        <div class="w-input" id="agent-coin-trigger" onclick="openCoinPicker()" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:12px">
+          <span id="agent-coin-trigger-icon"></span>
+          <span id="agent-coin-trigger-label" style="flex:1;text-align:left">Bitcoin (BTC)</span>
+          <span style="color:var(--fg-m)">›</span>
+        </div>
+        <input type="hidden" id="agent-coin-value" value="bitcoin">
 
         <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:6px">เงื่อนไขแจ้งเตือนหลัก</div>
         <select class="w-input" id="agent-cond-type" style="margin-bottom:12px">
@@ -1133,6 +1150,19 @@
           <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAgentAddForm()">ยกเลิก</button>
           <button type="button" class="w-btn" onclick="submitAgentWatch()">บันทึก</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coin Picker Modal -->
+  <div class="sheet-overlay" id="modal-coin-picker" onclick="closeCoinPickerOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">เลือกเหรียญ</div>
+      <div class="coin-pick-grid" id="coin-pick-grid"></div>
+      <div id="coin-pick-custom-wrap" style="display:none;margin-top:12px">
+        <input class="w-input" id="coin-pick-custom-input" placeholder="พิมพ์ CoinGecko ID เช่น pepe, near, arbitrum" style="margin-bottom:8px">
+        <button type="button" class="w-btn" onclick="confirmCustomCoin()">ยืนยันเหรียญนี้</button>
       </div>
     </div>
   </div>
@@ -3749,6 +3779,7 @@ function openAgent(){
   document.getElementById('agent-list-view').style.display='block';
   document.getElementById('agent-add-view').style.display='none';
   document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-portfolio-view').style.display='none';
   document.getElementById('agent-budget-edit').style.display='none';
   renderAgentList();
   updateAgentBudgetDisplay();
@@ -3787,8 +3818,6 @@ function showAgentAddForm(editId){
   _agentEditingId = editId || null;
   document.getElementById('agent-list-view').style.display='none';
   document.getElementById('agent-add-view').style.display='block';
-  document.getElementById('agent-coin-custom').style.display='none';
-  document.getElementById('agent-coin-custom').value='';
   document.getElementById('agent-cond-value').value='';
   document.getElementById('agent-realert').checked=false;
   document.getElementById('agent-tiers-list').innerHTML='';
@@ -3797,24 +3826,21 @@ function showAgentAddForm(editId){
   var ownAllocated = editing ? (editing.allocated||0) : 0;
   var remain = getAgentRemainingBudget() + ownAllocated; // ไม่หักเงินของตัวเองตอนแก้ไข
 
-  var sel=document.getElementById('agent-coin-select');
   var slider=document.getElementById('agent-alloc-slider');
   slider.max=remain;
 
   if(editing){
-    var isPreset = !!AGENT_COIN_LABELS[editing.coin];
-    sel.value = isPreset ? editing.coin : '__custom';
-    document.getElementById('agent-coin-custom').style.display = isPreset ? 'none' : 'block';
-    document.getElementById('agent-coin-custom').value = isPreset ? '' : editing.coin;
+    document.getElementById('agent-coin-value').value = editing.coin;
     document.getElementById('agent-cond-type').value = editing.condType;
     document.getElementById('agent-cond-value').value = editing.condValue;
     document.getElementById('agent-realert').checked = !!editing.reAlertOnReturn;
     slider.value = ownAllocated;
     (editing.tiers||[]).forEach(function(t){ addAgentTierRow(t.gainPct,t.sellPct); });
   } else {
-    sel.value='bitcoin';
+    document.getElementById('agent-coin-value').value='bitcoin';
     slider.value=0;
   }
+  updateCoinTriggerDisplay();
   onAgentAllocSlide();
   if(remain<=0 && !editing){ document.getElementById('agent-alloc-remain-lbl').innerHTML='<span style="color:var(--yellow)">งบลงทุนเต็มแล้ว — ตั้งงบเพิ่มได้ที่หน้าหลักของเอเจนต์ ถ้าไม่ตั้งงบ ระบบจะแจ้งเตือนอย่างเดียวโดยไม่จัดสรรเงิน</span>'; }
 }
@@ -3823,12 +3849,61 @@ function hideAgentAddForm(){
   document.getElementById('agent-list-view').style.display='block';
   document.getElementById('agent-add-view').style.display='none';
 }
-document.addEventListener('DOMContentLoaded', function(){
-  var sel=document.getElementById('agent-coin-select');
-  if(sel){ sel.addEventListener('change', function(){
-    document.getElementById('agent-coin-custom').style.display = (sel.value==='__custom') ? 'block' : 'none';
-  }); }
-});
+
+var AGENT_PRESET_COINS=['bitcoin','ethereum','binancecoin','solana','ripple','dogecoin','cardano','tron'];
+function ensurePresetCoinImages(){
+  var missing=AGENT_PRESET_COINS.filter(function(id){return !_agentCoinImages[id];});
+  if(!missing.length) return Promise.resolve();
+  return fetchCoinPrices(AGENT_PRESET_COINS);
+}
+function openCoinPicker(){
+  document.getElementById('modal-coin-picker').classList.add('open');
+  document.getElementById('coin-pick-custom-wrap').style.display='none';
+  renderCoinPickGrid();
+  ensurePresetCoinImages().then(renderCoinPickGrid);
+}
+function closeCoinPickerOutside(e){ if(e.target===e.currentTarget) document.getElementById('modal-coin-picker').classList.remove('open'); }
+function renderCoinPickGrid(){
+  var grid=document.getElementById('coin-pick-grid');
+  var current=document.getElementById('agent-coin-value').value;
+  grid.innerHTML='';
+  AGENT_PRESET_COINS.forEach(function(id){
+    var card=document.createElement('div');
+    card.className='coin-pick-card'+(id===current?' selected':'');
+    card.innerHTML=agentCoinIconHTML(id,40)+'<div style="font-size:.7rem;font-weight:700">'+AGENT_COIN_LABELS[id]+'</div>';
+    card.onclick=function(){ selectCoin(id); };
+    grid.appendChild(card);
+  });
+  var customCard=document.createElement('div');
+  customCard.className='coin-pick-card'+(!AGENT_COIN_LABELS[current]?' selected':'');
+  customCard.innerHTML='<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:1.2rem">✏️</div><div style="font-size:.7rem;font-weight:700">อื่น ๆ</div>';
+  customCard.onclick=function(){ showCustomCoinInput(); };
+  grid.appendChild(customCard);
+}
+function showCustomCoinInput(){
+  document.getElementById('coin-pick-custom-wrap').style.display='block';
+  var current=document.getElementById('agent-coin-value').value;
+  document.getElementById('coin-pick-custom-input').value = AGENT_COIN_LABELS[current] ? '' : current;
+}
+function confirmCustomCoin(){
+  var v=document.getElementById('coin-pick-custom-input').value.trim().toLowerCase();
+  if(!v){ toast('error','กรุณาระบุ CoinGecko ID ของเหรียญ'); return; }
+  selectCoin(v);
+}
+function selectCoin(coinId){
+  document.getElementById('agent-coin-value').value=coinId;
+  updateCoinTriggerDisplay();
+  document.getElementById('modal-coin-picker').classList.remove('open');
+  // ถ้าเป็นเหรียญที่พิมพ์เอง ลองดึงราคา+โลโก้มาเตรียมไว้เลย
+  if(!AGENT_COIN_LABELS[coinId]) checkAgentAlerts();
+  fetchCoinPrices([coinId]).then(function(){ updateCoinTriggerDisplay(); });
+}
+function updateCoinTriggerDisplay(){
+  var coinId=document.getElementById('agent-coin-value').value;
+  var label=AGENT_COIN_LABELS[coinId]||coinId.toUpperCase();
+  document.getElementById('agent-coin-trigger-icon').innerHTML=agentCoinIconHTML(coinId,28);
+  document.getElementById('agent-coin-trigger-label').textContent=label;
+}
 function onAgentAllocSlide(){
   var slider=document.getElementById('agent-alloc-slider');
   var v=parseFloat(slider.value)||0;
@@ -3848,8 +3923,7 @@ function addAgentTierRow(gainVal,sellVal){
   wrap.appendChild(row);
 }
 function submitAgentWatch(){
-  var sel=document.getElementById('agent-coin-select');
-  var coinId = sel.value==='__custom' ? document.getElementById('agent-coin-custom').value.trim().toLowerCase() : sel.value;
+  var coinId = document.getElementById('agent-coin-value').value.trim().toLowerCase();
   var condType=document.getElementById('agent-cond-type').value;
   var condValue=parseFloat(document.getElementById('agent-cond-value').value);
   var reAlert=document.getElementById('agent-realert').checked;
@@ -3928,7 +4002,7 @@ function renderAgentList(){
     var row=document.createElement('div');
     row.className='agent-watch-row';
     row.style.flexWrap='wrap';
-    row.innerHTML='<div class="agent-coin-icon">'+label.slice(0,4)+'</div>'+
+    row.innerHTML=agentCoinIconHTML(w.coin)+
       '<div style="flex:1;min-width:0"><div class="agent-w-name">'+label+
         (w.allocated>0?' · '+w.allocated.toFixed(2)+' USDC':'')+
         ' <span style="color:var(--fg-m);font-weight:600">'+priceTxt+'</span></div>'+
@@ -3959,6 +4033,58 @@ function hideAgentHistory(){
   document.getElementById('agent-history-view').style.display='none';
   document.getElementById('agent-list-view').style.display='block';
 }
+
+var AGENT_PORT_COLORS=['#8b5fcf','#34d399','#f472b6','#fbbf24','#60a5fa','#f87171','#a78bfa','#fb923c'];
+function showAgentPortfolio(){
+  document.getElementById('agent-list-view').style.display='none';
+  document.getElementById('agent-add-view').style.display='none';
+  document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-portfolio-view').style.display='block';
+  renderAgentPortfolio(); // แสดงด้วยราคาที่มีอยู่ก่อน (เผื่อยังไม่เคยเช็ค)
+  checkAgentAlerts().then(renderAgentPortfolio); // แล้วรีเฟรชอีกทีด้วยราคาล่าสุด
+}
+function hideAgentPortfolio(){
+  document.getElementById('agent-portfolio-view').style.display='none';
+  document.getElementById('agent-list-view').style.display='block';
+}
+function renderAgentPortfolio(){
+  var list=getAgentWatches().filter(function(w){return (w.allocated||0)>0;});
+  var box=document.getElementById('agent-portfolio-list');
+  if(list.length===0){
+    box.innerHTML='<div class="agent-empty">ยังไม่มีเหรียญที่จัดสรรเงินลงทุนไว้<br>ไปตั้งค่าที่หน้ารายการเฝ้าราคาก่อนครับ</div>';
+    document.getElementById('agent-portfolio-total').textContent='0.00 USDC';
+    return;
+  }
+  var rows=list.map(function(w,i){
+    var price=_agentPriceCache[w.coin];
+    var hasData = w.basePrice>0 && typeof price==='number';
+    var qty = hasData ? (w.allocated/w.basePrice) : 0;
+    var value = hasData ? (qty*price) : w.allocated; // ถ้ายังไม่มีราคา ใช้เงินที่จัดสรรไปก่อนชั่วคราว
+    return { w:w, qty:qty, value:value, hasData:hasData, color:AGENT_PORT_COLORS[i%AGENT_PORT_COLORS.length] };
+  });
+  var total=rows.reduce(function(s,r){return s+r.value;},0) || 1;
+  document.getElementById('agent-portfolio-total').textContent=total.toFixed(2)+' USDC';
+
+  box.innerHTML='';
+  rows.forEach(function(r){
+    var w=r.w;
+    var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
+    var pct=(r.value/total*100);
+    var gainPct = r.hasData ? ((r.value-w.allocated)/w.allocated*100) : null;
+    var gainTxt = gainPct===null ? '' :
+      (' · <span style="color:'+(gainPct>=0?'var(--green)':'var(--red)')+'">'+(gainPct>=0?'+':'')+gainPct.toFixed(1)+'%</span>');
+    var row=document.createElement('div');
+    row.className='agent-port-row';
+    row.innerHTML=
+      '<div class="agent-port-top">'+
+        '<span style="display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700">'+agentCoinIconHTML(w.coin,20)+label+'</span>'+
+        '<span style="font-size:.78rem;font-weight:700">'+pct.toFixed(1)+'% · '+r.value.toFixed(2)+' USDC'+gainTxt+'</span>'+
+      '</div>'+
+      '<div class="agent-port-bar-bg"><div class="agent-port-bar-fill" style="width:'+pct.toFixed(1)+'%;background:'+r.color+'"></div></div>'+
+      (r.hasData?'':'<div style="font-size:.6rem;color:var(--fg-m);margin-top:2px">รอราคาล่าสุด...</div>');
+    box.appendChild(row);
+  });
+}
 function clearAgentHistory(){
   save(agentHistoryKey(),[]);
   renderAgentHistory();
@@ -3984,7 +4110,7 @@ function renderAgentHistory(){
   hist.forEach(function(h){
     var row=document.createElement('div');
     row.className='agent-watch-row';
-    row.innerHTML='<div class="agent-coin-icon">'+(AGENT_COIN_LABELS[h.coin]||h.coin||'?').toString().slice(0,4)+'</div>'+
+    row.innerHTML=agentCoinIconHTML(h.coin)+
       '<div><div class="agent-w-name">'+(AGENT_COIN_LABELS[h.coin]||h.coin)+'</div>'+
       '<div class="agent-w-cond">'+h.message+'</div>'+
       '<div class="agent-w-cond" style="opacity:.7">'+agentTimeAgo(h.ts)+'</div></div>';
@@ -3997,11 +4123,28 @@ function renderAgentHistory(){
 // ============================================================
 var _agentPriceCache={}; // coinId -> ราคาล่าสุดที่ดึงได้ (ใช้แสดงผลเฉยๆ ไม่ persist)
 var _agentPriceTrend={}; // coinId -> 'up' | 'down' (เทียบกับราคารอบก่อนหน้า ใช้แสดงลูกศร)
+var _agentCoinImages={}; // coinId -> url โลโก้จาก CoinGecko
 function fetchCoinPrices(ids){
   if(!ids || !ids.length) return Promise.resolve({});
-  var url='https://api.coingecko.com/api/v3/simple/price?ids='+encodeURIComponent(ids.join(','))+'&vs_currencies=usd';
+  var url='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids='+encodeURIComponent(ids.join(','));
   return fetch(url).then(function(r){ if(!r.ok) throw new Error('coingecko '+r.status); return r.json(); })
+    .then(function(arr){
+      var out={};
+      (arr||[]).forEach(function(c){
+        out[c.id]={usd:c.current_price};
+        if(c.image) _agentCoinImages[c.id]=c.image;
+      });
+      return out;
+    })
     .catch(function(e){ console.warn('ดึงราคาเหรียญไม่สำเร็จ',e); return {}; });
+}
+function agentCoinIconHTML(coinId, size){
+  size = size || 36;
+  var label = AGENT_COIN_LABELS[coinId] || coinId.toUpperCase();
+  if(_agentCoinImages[coinId]){
+    return '<img src="'+_agentCoinImages[coinId]+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.08)" onerror="this.outerHTML=\'<div class=&quot;agent-coin-icon&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+label.slice(0,4)+'</div>\'">';
+  }
+  return '<div class="agent-coin-icon" style="width:'+size+'px;height:'+size+'px">'+label.slice(0,4)+'</div>';
 }
 function fireAgentAlert(coinId, message){
   var label=AGENT_COIN_LABELS[coinId]||coinId.toUpperCase();
@@ -4013,9 +4156,9 @@ function fireAgentAlert(coinId, message){
 }
 function checkAgentAlerts(){
   var list=getAgentWatches();
-  if(!list.length) return;
+  if(!list.length) return Promise.resolve();
   var ids=[]; list.forEach(function(w){ if(ids.indexOf(w.coin)<0) ids.push(w.coin); });
-  fetchCoinPrices(ids).then(function(prices){
+  return fetchCoinPrices(ids).then(function(prices){
     var changed=false;
     list.forEach(function(w){
       var priceObj=prices[w.coin];
