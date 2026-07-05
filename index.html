@@ -3915,6 +3915,9 @@ function renderAgentList(){
     var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
     var tierSummary=agentTierSummary(w);
     var priceTxt = (typeof _agentPriceCache[w.coin]==='number') ? ('$'+_agentPriceCache[w.coin].toFixed(4)) : '—';
+    var trend=_agentPriceTrend[w.coin];
+    var trendArrow = trend==='up' ? ' <span style="color:var(--green)">▲</span>' : (trend==='down' ? ' <span style="color:var(--red)">▼</span>' : '');
+    priceTxt += trendArrow;
     var row=document.createElement('div');
     row.className='agent-watch-row';
     row.style.flexWrap='wrap';
@@ -3986,6 +3989,7 @@ function renderAgentHistory(){
 // เอเจนต์ — ดึงราคาจริงจาก CoinGecko + ตรวจสอบเงื่อนไขแจ้งเตือนจริง
 // ============================================================
 var _agentPriceCache={}; // coinId -> ราคาล่าสุดที่ดึงได้ (ใช้แสดงผลเฉยๆ ไม่ persist)
+var _agentPriceTrend={}; // coinId -> 'up' | 'down' (เทียบกับราคารอบก่อนหน้า ใช้แสดงลูกศร)
 function fetchCoinPrices(ids){
   if(!ids || !ids.length) return Promise.resolve({});
   var url='https://api.coingecko.com/api/v3/simple/price?ids='+encodeURIComponent(ids.join(','))+'&vs_currencies=usd';
@@ -4010,6 +4014,10 @@ function checkAgentAlerts(){
       var priceObj=prices[w.coin];
       if(!priceObj || typeof priceObj.usd!=='number') return;
       var price=priceObj.usd;
+      var prevPrice=_agentPriceCache[w.coin];
+      if(typeof prevPrice==='number' && price!==prevPrice){
+        _agentPriceTrend[w.coin] = price>prevPrice ? 'up' : 'down';
+      }
       _agentPriceCache[w.coin]=price;
       if(!w.basePrice){ w.basePrice=price; changed=true; }
 
