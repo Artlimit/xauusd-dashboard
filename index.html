@@ -1175,7 +1175,7 @@ function pushFamilyToCloud(){
     }, {merge:true}).catch(function(e){console.warn('push family error',e);});
     members.forEach(function(m){
       _fb.db.collection('families').doc(fam.code).collection('members').doc(m.id).set({
-        name:m.name, role:m.role, color:m.color, pin:m.pin, updatedAt: Date.now()
+        name:m.name, role:m.role, color:m.color, pin:m.pin, photo:getPhoto(m.id)||null, updatedAt: Date.now()
       }, {merge:true}).catch(function(e){console.warn('push member error',e);});
     });
   });
@@ -1962,6 +1962,9 @@ function confirmJoinAsMember(m){
       return {id:x.id,name:x.name,role:x.role,color:x.color||'#8b5fcf',pin:x.pin,createdAt:x.createdAt||Date.now()};
     });
     save(KEYS.members,localMembers);
+    var localPhotos=load('pp_photos',{});
+    _joinFoundMembers.forEach(function(x){ if(x.photo) localPhotos[x.id]=x.photo; });
+    save('pp_photos',localPhotos);
     var accounts={}; localMembers.forEach(function(x){accounts[x.id]={balance:0};});
     save(KEYS.accounts,accounts);
     save(KEYS.tx,[]);
@@ -2335,6 +2338,7 @@ function handleProfilePhoto(e){
       save('pp_photos',photos);
       var av=document.getElementById('pf-avatar');setAvatarEl(av,getCurrentMember());
       var navAv=document.getElementById('nav-avatar');setAvatarEl(navAv,getCurrentMember());
+      pushFamilyToCloud();
       toast('success','อัปเดตรูปโปรไฟล์แล้ว');
     };
     img.src=ev.target.result;
@@ -3551,6 +3555,10 @@ function startWatchingOthersGPS(){
   var fam=getFamily(); if(!fam||!fam.code) return;
   initFirebase().then(function(ok){
     if(!ok){ document.getElementById('gps-member-list').innerHTML='<div style="font-size:.72rem;color:var(--fg-m);text-align:center;padding:10px">ยังไม่ได้ตั้งค่า Firebase</div>'; return; }
+    var memberInfo={}; // id -> {name,color,photo} สำหรับทำ avatar
+    _fb.db.collection('families').doc(fam.code).collection('members').get().then(function(msnap){
+      msnap.forEach(function(doc){ memberInfo[doc.id]=doc.data(); });
+    }).catch(function(e){console.warn('fetch members error',e);});
     if(_gpsUnsub) _gpsUnsub();
     _gpsUnsub=_fb.db.collection('families').doc(fam.code).collection('locations')
       .onSnapshot(function(snap){
@@ -3559,11 +3567,18 @@ function startWatchingOthersGPS(){
         list.innerHTML='';
         snap.forEach(function(doc){
           var d=doc.data();
+          var info=memberInfo[doc.id]||{};
           var mins=Math.max(0,Math.round((Date.now()-(d.updatedAt||0))/60000));
           var timeTxt = mins<1 ? 'อัปเดตเมื่อสักครู่' : ('อัปเดต '+mins+' นาทีที่แล้ว');
+          var avatarDiv;
+          if(info.photo){
+            avatarDiv='<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:'+(info.color||'#8b5fcf')+'"><img src="'+info.photo+'" style="width:100%;height:100%;object-fit:cover"></div>';
+          } else {
+            avatarDiv='<div style="width:36px;height:36px;border-radius:50%;background:'+(info.color||'#8b5fcf')+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;font-family:\'Nunito\',sans-serif;flex-shrink:0">'+d.name.charAt(0)+'</div>';
+          }
           var row=document.createElement('div');
           row.className='gps-member-row';
-          row.innerHTML='<div><div class="gps-m-name">'+d.name+'</div><div class="gps-m-time">'+timeTxt+'</div></div>'+
+          row.innerHTML=avatarDiv+'<div><div class="gps-m-name">'+d.name+'</div><div class="gps-m-time">'+timeTxt+'</div></div>'+
             '<a class="gps-map-link" target="_blank" rel="noopener" href="https://www.google.com/maps?q='+d.lat+','+d.lng+'">เปิดแผนที่</a>';
           list.appendChild(row);
         });
