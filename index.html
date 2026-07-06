@@ -657,8 +657,8 @@
         พิมพ์ชื่อสถานที่แล้วกด "ค้นหาอัตโนมัติ" ระบบจะดึงรูป+ที่อยู่ให้ (ต้นทุน/งบประมาณยังกรอกเองก่อน เพราะไม่มี API ราคาทริปฟรีที่แม่นยำ)
       </p>
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input class="w-input" id="trip-name" placeholder="ชื่อสถานที่ เช่น เขาใหญ่, Kyoto Japan" style="flex:1">
-        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--purple-light);white-space:nowrap;padding:0 14px" onclick="autoFetchTripInfo()">🔍 ค้นหา</button>
+        <input class="w-input" id="trip-name" placeholder="ชื่อสถานที่ เช่น เขาใหญ่, Kyoto Japan" style="flex:1;min-width:0">
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--purple-light);white-space:nowrap;padding:0 14px;width:auto;flex:0 0 auto" onclick="autoFetchTripInfo()">🔍 ค้นหา</button>
       </div>
       <div id="trip-fetch-status" style="font-size:.62rem;color:var(--fg-m);margin-bottom:8px;display:none"></div>
       <div id="trip-photo-preview" style="display:none;margin-bottom:12px">
