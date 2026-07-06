@@ -352,6 +352,16 @@
       font-size:.7rem;font-weight:700;color:var(--fg)}
     .agent-link-card:active{transform:scale(.96)}
     .agent-link-icon{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.05rem}
+    .trip-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;cursor:pointer}
+    .trip-card-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .trip-photo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,rgba(139,95,207,.25),rgba(52,211,153,.25));
+      display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .trip-name{font-size:.95rem;font-weight:800}
+    .trip-addr{font-size:.68rem;color:var(--fg-m)}
+    .trip-del{margin-left:auto;background:none;border:none;color:var(--red);font-size:.68rem;cursor:pointer;padding:6px}
+    .trip-progress-bg{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:6px}
+    .trip-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),var(--purple-light))}
+    .trip-progress-lbl{display:flex;justify-content:space-between;font-size:.68rem;color:var(--fg-m)}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -622,6 +632,52 @@
     <div class="filter-tabs" id="filter-tabs"></div>
     <div class="tx-list" id="history-tx-list" style="padding-top:0"></div>
     <div class="empty-state" id="history-empty" style="display:none">ไม่มีธุรกรรมในหมวดนี้</div>
+  </div>
+
+  <div class="screen travel-screen" id="scr-travel">
+    <div class="page-hdr">
+      <button class="page-back" onclick="navigate('main')">‹</button>
+      <span class="page-title">ท่องเที่ยว</span>
+    </div>
+    <p style="font-size:.65rem;color:var(--fg-m);text-align:center;padding:0 20px 14px;line-height:1.6">
+      เก็บสถานที่ที่อยากไป ตั้งงบประมาณ และติดตามเงินออมสำหรับแต่ละทริป
+    </p>
+    <div id="travel-trip-list" style="padding:0 20px"></div>
+    <div style="padding:0 20px 20px">
+      <button class="w-btn" onclick="openAddTrip()">＋ เพิ่มทริปใหม่</button>
+    </div>
+  </div>
+
+  <!-- Add/Edit Trip Modal -->
+  <div class="sheet-overlay" id="modal-trip" onclick="closeTripOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🧳 เพิ่มทริปใหม่</div>
+      <p style="font-size:.62rem;color:var(--fg-m);text-align:center;margin-bottom:14px;line-height:1.5">
+        พิมพ์ชื่อสถานที่แล้วกด "ค้นหาอัตโนมัติ" ระบบจะดึงรูป+ที่อยู่ให้ (ต้นทุน/งบประมาณยังกรอกเองก่อน เพราะไม่มี API ราคาทริปฟรีที่แม่นยำ)
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="w-input" id="trip-name" placeholder="ชื่อสถานที่ เช่น เขาใหญ่, Kyoto Japan" style="flex:1">
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--purple-light);white-space:nowrap;padding:0 14px" onclick="autoFetchTripInfo()">🔍 ค้นหา</button>
+      </div>
+      <div id="trip-fetch-status" style="font-size:.62rem;color:var(--fg-m);margin-bottom:8px;display:none"></div>
+      <div id="trip-photo-preview" style="display:none;margin-bottom:12px">
+        <img id="trip-photo-img" style="width:100%;height:130px;object-fit:cover;border-radius:12px">
+      </div>
+      <input type="hidden" id="trip-photo-url">
+      <input type="hidden" id="trip-lat">
+      <input type="hidden" id="trip-lng">
+      <input class="w-input" id="trip-address" placeholder="ที่อยู่ / จังหวัด / ประเทศ (ถ้ามี)" style="margin-bottom:12px">
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <input class="w-input" id="trip-budget" type="number" placeholder="งบประมาณ (บาท)">
+        <input class="w-input" id="trip-saved" type="number" placeholder="เก็บออมแล้ว (บาท)">
+      </div>
+      <textarea class="w-input" id="trip-note" placeholder="โน้ต เช่น อยากไปหน้าหนาว, ต้องขอวีซ่า" style="margin-bottom:16px;min-height:70px;resize:vertical"></textarea>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAddTrip()">ยกเลิก</button>
+        <button type="button" class="w-btn" onclick="submitTrip()">บันทึก</button>
+      </div>
+    </div>
   </div>
 
   <div class="screen family-screen" id="scr-family">
@@ -1246,7 +1302,7 @@
 
   <nav class="bot-nav" id="bot-nav" style="display:none">
     <button class="bn-item active" data-tab="main" onclick="navigate('main')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>หน้าแรก</span></button>
-    <button class="bn-item" data-tab="history" onclick="navigate('history')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>ประวัติ</span></button>
+    <button class="bn-item" data-tab="travel" onclick="navigate('travel')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg><span>ท่องเที่ยว</span></button>
     <button class="bn-center" onclick="openScanPay()" title="สแกน QR จ่าย">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -2044,7 +2100,7 @@ function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active','screen-fade-in');});
   var scr=document.getElementById('scr-'+screenId);
   if(scr){scr.classList.add('active','screen-fade-in');}
-  var navScreens=['main','history','family','profile'];
+  var navScreens=['main','history','family','profile','travel'];
   document.getElementById('bot-nav').style.display=navScreens.includes(screenId)?'flex':'none';
   var fab=document.getElementById('agent-fab'); if(fab) fab.style.display=(screenId==='main')?'flex':'none';
   document.querySelectorAll('.bn-item').forEach(function(b){b.classList.toggle('active',b.dataset.tab===screenId);});
@@ -2053,6 +2109,7 @@ function navigate(screenId) {
   if(screenId==='family')renderFamily();
   if(screenId==='profile')renderProfile();
   if(screenId==='chart')renderChart();
+  if(screenId==='travel')renderTravel();
   closeAllModals();
 }
 
@@ -4287,6 +4344,137 @@ function maybeAskAgentNotifyPermission(){
   if('Notification' in window && Notification.permission==='default'){
     Notification.requestPermission();
   }
+}
+
+// ============================================================
+// ท่องเที่ยว — เก็บสถานที่ที่อยากไป + งบประมาณ + เงินออม (ตัวอย่างเวอร์ชันแรก ยังไม่ดึงรูป/ที่อยู่อัตโนมัติ)
+// ============================================================
+var _tripEditingId=null;
+function tripKey(){ var m=getCurrentMember(); return m?('pp_trips_'+m.id):'pp_trips_none'; }
+function getTripList(){ return load(tripKey(),[]); }
+function saveTripList(list){ save(tripKey(),list); }
+function renderTravel(){
+  var list=getTripList();
+  var box=document.getElementById('travel-trip-list');
+  if(list.length===0){
+    box.innerHTML='<div class="agent-empty">ยังไม่มีทริปที่บันทึกไว้<br>กด "+ เพิ่มทริปใหม่" ด้านล่างเพื่อเริ่มต้น</div>';
+    return;
+  }
+  box.innerHTML='';
+  list.forEach(function(t){
+    var pct = t.budget>0 ? Math.min(100,(t.saved||0)/t.budget*100) : 0;
+    var card=document.createElement('div');
+    card.className='trip-card';
+    card.innerHTML=
+      '<div class="trip-card-top">'+
+        (t.photoUrl
+          ? '<div class="trip-photo" style="padding:0;overflow:hidden"><img src="'+t.photoUrl+'" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML=\'<svg width=&quot;24&quot; height=&quot;24&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;var(--purple-light)&quot; stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;><path d=&quot;M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z&quot;/><circle cx=&quot;12&quot; cy=&quot;10&quot; r=&quot;3&quot;/></svg>\'"></div>'
+          : '<div class="trip-photo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--purple-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div>')+
+        '<div style="flex:1;min-width:0"><div class="trip-name">'+t.name+'</div>'+
+        (t.address?'<div class="trip-addr">'+t.address+'</div>':'')+'</div>'+
+        '<button type="button" class="trip-del" onclick="event.stopPropagation();deleteTrip(\''+t.id+'\')">ลบ</button>'+
+      '</div>'+
+      (t.lat && t.lng ? '<a href="https://www.google.com/maps/dir/?api=1&destination='+t.lat+','+t.lng+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-block;font-size:.65rem;color:var(--purple-light);margin-bottom:8px">🧭 เปิดเส้นทางไปที่นี่</a><br>' : '')+
+      (t.budget>0 ?
+        ('<div class="trip-progress-bg"><div class="trip-progress-fill" style="width:'+pct.toFixed(0)+'%"></div></div>'+
+         '<div class="trip-progress-lbl"><span>ออมแล้ว '+(t.saved||0).toLocaleString()+' บาท</span><span>เป้าหมาย '+t.budget.toLocaleString()+' บาท</span></div>')
+        : '');
+    card.onclick=function(){ openAddTrip(t.id); };
+    box.appendChild(card);
+  });
+}
+function openAddTrip(editId){
+  _tripEditingId = editId || null;
+  var editing = _tripEditingId ? getTripList().find(function(t){return t.id===_tripEditingId;}) : null;
+  document.getElementById('trip-name').value = editing ? editing.name : '';
+  document.getElementById('trip-address').value = editing ? (editing.address||'') : '';
+  document.getElementById('trip-budget').value = editing ? (editing.budget||'') : '';
+  document.getElementById('trip-saved').value = editing ? (editing.saved||'') : '';
+  document.getElementById('trip-note').value = editing ? (editing.note||'') : '';
+  document.getElementById('trip-photo-url').value = editing ? (editing.photoUrl||'') : '';
+  document.getElementById('trip-lat').value = editing ? (editing.lat||'') : '';
+  document.getElementById('trip-lng').value = editing ? (editing.lng||'') : '';
+  var photoPrev=document.getElementById('trip-photo-preview');
+  if(editing && editing.photoUrl){ document.getElementById('trip-photo-img').src=editing.photoUrl; photoPrev.style.display='block'; }
+  else { photoPrev.style.display='none'; }
+  document.getElementById('trip-fetch-status').style.display='none';
+  document.getElementById('modal-trip').classList.add('open');
+}
+function hideAddTrip(){ document.getElementById('modal-trip').classList.remove('open'); _tripEditingId=null; }
+function closeTripOutside(e){ if(e.target===e.currentTarget) hideAddTrip(); }
+
+// ค้นหาที่อยู่+รูปสถานที่อัตโนมัติ ใช้ Nominatim (OpenStreetMap, ฟรี ไม่ต้องมี API key) + Wikipedia REST API (ฟรี)
+function autoFetchTripInfo(){
+  var name=document.getElementById('trip-name').value.trim();
+  if(!name){ toast('error','กรุณากรอกชื่อสถานที่ก่อนค้นหา'); return; }
+  var statusEl=document.getElementById('trip-fetch-status');
+  statusEl.style.display='block'; statusEl.textContent='กำลังค้นหา...';
+
+  var geocodeUrl='https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(name);
+  fetch(geocodeUrl, {headers:{'Accept':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(results){
+      if(results && results[0]){
+        var place=results[0];
+        document.getElementById('trip-address').value=place.display_name;
+        document.getElementById('trip-lat').value=place.lat;
+        document.getElementById('trip-lng').value=place.lon;
+        statusEl.textContent='พบที่อยู่แล้ว กำลังหารูปภาพ...';
+      } else {
+        statusEl.textContent='ไม่พบที่อยู่ของสถานที่นี้ ลองพิมพ์ชื่อให้ชัดเจนขึ้น (เช่น เพิ่มชื่อจังหวัด/ประเทศ)';
+      }
+      return fetchTripPhoto(name);
+    })
+    .then(function(photoUrl){
+      if(photoUrl){
+        document.getElementById('trip-photo-url').value=photoUrl;
+        document.getElementById('trip-photo-img').src=photoUrl;
+        document.getElementById('trip-photo-preview').style.display='block';
+        statusEl.textContent='ค้นหาสำเร็จ ✓';
+      } else if(statusEl.textContent.indexOf('ไม่พบที่อยู่')<0){
+        statusEl.textContent='พบที่อยู่แล้ว แต่ไม่พบรูปภาพสำหรับสถานที่นี้ (ใส่รูปเองไม่ได้ในเวอร์ชันนี้)';
+      }
+    })
+    .catch(function(e){
+      console.warn('trip autofetch error',e);
+      statusEl.textContent='เกิดข้อผิดพลาดระหว่างค้นหา ลองใหม่อีกครั้ง';
+    });
+}
+// ดึงรูปจาก Wikipedia REST API (ลองภาษาไทยก่อน แล้วค่อยลองอังกฤษ)
+function fetchTripPhoto(name){
+  function tryLang(lang){
+    var url='https://'+lang+'.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(name);
+    return fetch(url).then(function(r){ if(!r.ok) throw new Error('not found'); return r.json(); })
+      .then(function(data){ return (data.thumbnail && data.thumbnail.source) ? data.thumbnail.source : null; });
+  }
+  return tryLang('th').catch(function(){ return tryLang('en'); }).catch(function(){ return null; });
+}
+function submitTrip(){
+  var name=document.getElementById('trip-name').value.trim();
+  if(!name){ toast('error','กรุณากรอกชื่อสถานที่'); return; }
+  var address=document.getElementById('trip-address').value.trim();
+  var budget=parseFloat(document.getElementById('trip-budget').value)||0;
+  var saved=parseFloat(document.getElementById('trip-saved').value)||0;
+  var note=document.getElementById('trip-note').value.trim();
+  var photoUrl=document.getElementById('trip-photo-url').value;
+  var lat=document.getElementById('trip-lat').value;
+  var lng=document.getElementById('trip-lng').value;
+  var list=getTripList();
+  if(_tripEditingId){
+    var t=list.find(function(x){return x.id===_tripEditingId;});
+    if(t){ t.name=name; t.address=address; t.budget=budget; t.saved=saved; t.note=note; t.photoUrl=photoUrl; t.lat=lat; t.lng=lng; }
+    toast('success','แก้ไขทริปแล้ว');
+  } else {
+    list.push({id:uid(),name:name,address:address,budget:budget,saved:saved,note:note,photoUrl:photoUrl,lat:lat,lng:lng,createdAt:Date.now()});
+    toast('success','เพิ่มทริปแล้ว');
+  }
+  saveTripList(list);
+  hideAddTrip();
+  renderTravel();
+}
+function deleteTrip(id){
+  saveTripList(getTripList().filter(function(t){return t.id!==id;}));
+  renderTravel();
 }
 
 // ============================================================
