@@ -389,6 +389,35 @@
     .health-actions{display:flex;gap:10px;margin-top:10px}
     .health-done-btn{flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--fg-m);font-family:inherit;font-size:.7rem;cursor:pointer}
     .health-done-btn.active{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.4);color:var(--green)}
+
+    /* Missions */
+    .mission-banner{display:flex;align-items:center;gap:12px;margin:0 20px 18px;padding:14px 16px;border-radius:16px;
+      background:linear-gradient(135deg,rgba(251,191,36,.18),rgba(139,95,207,.18));border:1px solid rgba(251,191,36,.3);cursor:pointer}
+    .mission-banner-icon{font-size:1.6rem;flex-shrink:0}
+    .mission-banner-title{font-size:.85rem;font-weight:800}
+    .mission-banner-sub{font-size:.62rem;color:var(--fg-m);margin-top:2px}
+    .mission-banner-arrow{font-size:1.3rem;color:var(--fg-m)}
+    .mission-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin:0 20px 14px}
+    .mission-card-hdr{font-size:.9rem;font-weight:800;margin-bottom:10px}
+    .mission-progress-bg{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:6px}
+    .mission-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),var(--purple-light))}
+    .mission-progress-lbl{display:flex;justify-content:space-between;font-size:.65rem;color:var(--fg-m);margin-bottom:10px}
+    .mission-sub{font-size:.65rem;color:var(--fg-m);line-height:1.6;margin-bottom:8px}
+    .mission-reward-tag{display:inline-block;font-size:.6rem;padding:3px 9px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--yellow);font-weight:700}
+    .mission-run-live{text-align:center;padding:16px 0;margin-bottom:10px;border-radius:12px;background:rgba(139,95,207,.08)}
+    .mission-run-live .big{font-size:1.7rem;font-weight:800}
+    .mission-run-live .lbl{font-size:.62rem;color:var(--fg-m);margin-top:2px}
+    .mission-streak-row{display:flex;gap:6px;margin-bottom:10px}
+    .mission-streak-dot{flex:1;height:8px;border-radius:999px;background:rgba(255,255,255,.08)}
+    .mission-streak-dot.on{background:var(--green)}
+    .mission-merit-thumb{width:100%;aspect-ratio:1;border-radius:12px;object-fit:cover}
+    .mission-merit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .mission-claim-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .mission-claim-row:last-child{border-bottom:none}
+    .mission-claim-amt{font-weight:800;color:var(--yellow);white-space:nowrap}
+    .mission-set-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .mission-set-row label{flex:1;font-size:.68rem;color:var(--fg-m)}
+    .mission-set-row input{width:90px;flex-shrink:0}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -646,6 +675,14 @@
       <div class="qi" onclick="navigate('history')"><div class="qi-icon q3"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="qi-label">ประวัติ</span></div>
       <div class="qi" onclick="navigate('family')"><div class="qi-icon q4"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div><span class="qi-label">ครอบครัว</span></div>
     </div>
+    <div class="mission-banner" onclick="navigate('missions')">
+      <div class="mission-banner-icon">🪙</div>
+      <div style="flex:1;min-width:0">
+        <div class="mission-banner-title">ภารกิจแลกเหรียญ USDC</div>
+        <div class="mission-banner-sub">ประหยัด • วิ่งออกกำลังกาย • ทำบุญ</div>
+      </div>
+      <div class="mission-banner-arrow">›</div>
+    </div>
     <div class="sec-hdr"><span class="sec-title">ธุรกรรมล่าสุด</span><span class="sec-link" onclick="navigate('history')">ดูทั้งหมด</span></div>
     <div class="tx-list" id="main-tx-list"></div>
     <div class="empty-state" id="main-empty" style="display:none">ยังไม่มีธุรกรรม — เริ่มส่งเงินให้คนในครอบครัวสิ</div>
@@ -762,6 +799,49 @@
         <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAddHealth()">ยกเลิก</button>
         <button type="button" class="w-btn" onclick="submitHealth()">บันทึก</button>
       </div>
+    </div>
+  </div>
+
+  <div class="screen missions-screen" id="scr-missions">
+    <div class="page-hdr">
+      <button class="page-back" onclick="navigate('main')">‹</button>
+      <span class="page-title">ภารกิจแลกเหรียญ</span>
+    </div>
+    <p style="font-size:.65rem;color:var(--fg-m);text-align:center;padding:0 20px 14px;line-height:1.6">
+      ทำภารกิจสะสมเหรียญ แลกเป็น USDC จริง — เจ้าบ้านจะเป็นผู้อนุมัติจ่ายรางวัลทุกครั้ง
+    </p>
+
+    <div class="mission-card">
+      <div class="mission-card-hdr">💰 ประหยัดรายสัปดาห์</div>
+      <div id="mission-save-body"></div>
+    </div>
+
+    <div class="mission-card">
+      <div class="mission-card-hdr">🏃 วิ่งออกกำลังกาย</div>
+      <div id="mission-run-body"></div>
+    </div>
+
+    <div class="mission-card">
+      <div class="mission-card-hdr">🙏 ทำบุญ</div>
+      <div id="mission-merit-body"></div>
+      <input type="file" id="merit-photo-file" accept="image/*" capture="environment" style="display:none" onchange="handleMeritPhoto(event)">
+    </div>
+
+    <div class="mission-card" id="mission-claims-card" style="display:none">
+      <div class="mission-card-hdr">🎁 รางวัลที่รอจ่าย</div>
+      <div id="mission-claims-body"></div>
+    </div>
+
+    <div class="mission-card" id="mission-settings-card" style="display:none">
+      <div class="mission-card-hdr">⚙️ ตั้งค่ารางวัล (เจ้าบ้านเท่านั้น)</div>
+      <div class="mission-set-row"><label>งบใช้จ่ายเป้าหมาย/สัปดาห์ (บาท)</label><input class="w-input" id="ms-save-budget" type="number"></div>
+      <div class="mission-set-row"><label>รางวัลประหยัดสำเร็จ (USDC/สัปดาห์)</label><input class="w-input" id="ms-save-reward" type="number" step="0.01"></div>
+      <div class="mission-set-row"><label>ระยะวิ่งขั้นต่ำ/วัน (กม.)</label><input class="w-input" id="ms-run-goal" type="number" step="0.1"></div>
+      <div class="mission-set-row"><label>รางวัลวิ่งครบเป้า (USDC/วัน)</label><input class="w-input" id="ms-run-reward" type="number" step="0.01"></div>
+      <div class="mission-set-row"><label>โบนัสวิ่งครบ 7 วันติด (USDC)</label><input class="w-input" id="ms-run-bonus" type="number" step="0.01"></div>
+      <div class="mission-set-row"><label>รางวัลทำบุญ (USDC/ครั้ง)</label><input class="w-input" id="ms-merit-reward" type="number" step="0.01"></div>
+      <div class="mission-set-row"><label>จำกัดทำบุญที่นับได้ (ครั้ง/สัปดาห์)</label><input class="w-input" id="ms-merit-max" type="number" step="1"></div>
+      <button class="w-btn" onclick="saveMissionSettings()">บันทึกการตั้งค่า</button>
     </div>
   </div>
 
@@ -1431,7 +1511,7 @@ function save(key, data) {
 // BLOCKCHAIN / BITGET WALLET INTEGRATION
 // ============================================================
 // Constants ต้องอยู่ก่อน blockchain code ที่อ้างอิงมัน
-var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain', health:'pp_health' };
+var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain', health:'pp_health', missions:'pp_missions' };
 var COLORS = ['#c084fc','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171','#a78bfa','#fb923c'];
 var ROLES = ['เจ้าบ้าน','แม่บ้าน','ลูกชาย','ลูกสาว','ปู่','ย่า','ตา','ยาย','สมาชิก','ผู้ดูแล'];
 
@@ -2185,7 +2265,7 @@ function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active','screen-fade-in');});
   var scr=document.getElementById('scr-'+screenId);
   if(scr){scr.classList.add('active','screen-fade-in');}
-  var navScreens=['main','history','family','health','profile','travel'];
+  var navScreens=['main','history','family','health','profile','travel','missions'];
   document.getElementById('bot-nav').style.display=navScreens.includes(screenId)?'flex':'none';
   var fab=document.getElementById('agent-fab'); if(fab) fab.style.display=(screenId==='main')?'flex':'none';
   document.querySelectorAll('.bn-item').forEach(function(b){b.classList.toggle('active',b.dataset.tab===screenId);});
@@ -2196,6 +2276,7 @@ function navigate(screenId) {
   if(screenId==='chart')renderChart();
   if(screenId==='travel')renderTravel();
   if(screenId==='health')renderHealth();
+  if(screenId==='missions')renderMissions();
   closeAllModals();
 }
 
@@ -4792,6 +4873,311 @@ function startHealthReminders(){
   }
   checkHealthReminders();
   setInterval(checkHealthReminders,60000);
+}
+
+// ============================================================
+// ภารกิจแลกเหรียญ USDC — ประหยัด / วิ่งออกกำลังกาย / ทำบุญ
+// ============================================================
+var DEFAULT_MISSION_SETTINGS = {
+  saveWeeklyBudget:1000, saveReward:1,
+  runGoalKm:1, runDailyReward:0.2, runWeeklyBonus:1,
+  meritReward:0.5, meritMaxPerWeek:1
+};
+function getMissions(){
+  var m=load(KEYS.missions,null);
+  if(!m){ m={settings:Object.assign({},DEFAULT_MISSION_SETTINGS),runSessions:[],meritLogs:[],claims:[]}; save(KEYS.missions,m); }
+  if(!m.settings) m.settings={};
+  Object.keys(DEFAULT_MISSION_SETTINGS).forEach(function(k){ if(m.settings[k]===undefined) m.settings[k]=DEFAULT_MISSION_SETTINGS[k]; });
+  if(!m.runSessions) m.runSessions=[];
+  if(!m.meritLogs) m.meritLogs=[];
+  if(!m.claims) m.claims=[];
+  return m;
+}
+function saveMissions(m){ save(KEYS.missions,m); }
+function missionWeekStart(d){
+  var dt=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  var day=dt.getDay(); var diff=(day===0?-6:1-day);
+  dt.setDate(dt.getDate()+diff);
+  return dt;
+}
+function computeWeekSpend(memberId,weekStartDate){
+  var start=weekStartDate.getTime(), end=start+7*86400000;
+  var sum=0;
+  load(KEYS.tx,[]).forEach(function(t){ if(t.fromId===memberId && t.timestamp>=start && t.timestamp<end) sum+=t.amount; });
+  return Math.round(sum*100)/100;
+}
+function createMissionClaim(memberId,type,label,amount,weekKey,date){
+  var m=getMissions();
+  m.claims.push({id:uid(),memberId:memberId,type:type,label:label,amount:amount,weekKey:weekKey||null,date:date||null,status:'pending',createdAt:Date.now()});
+  saveMissions(m);
+}
+function renderMissions(){
+  renderMissionSave();
+  renderMissionRun();
+  renderMissionMerit();
+  renderMissionClaims();
+  renderMissionSettings();
+}
+
+// --- ประหยัดรายสัปดาห์ ---
+function renderMissionSave(){
+  var box=document.getElementById('mission-save-body'); if(!box) return;
+  var member=getCurrentMember(); if(!member){box.innerHTML='';return;}
+  var m=getMissions();
+  var thisWeekStart=missionWeekStart(new Date());
+  var thisSpend=computeWeekSpend(member.id,thisWeekStart);
+  var budget=m.settings.saveWeeklyBudget;
+  var pct=budget>0?Math.min(100,thisSpend/budget*100):0;
+  var html='<div class="mission-sub">เป้าหมาย: ใช้จ่ายไม่เกิน '+budget.toLocaleString()+' บาท/สัปดาห์ • รางวัล <span class="mission-reward-tag">+'+m.settings.saveReward+' USDC/สัปดาห์</span></div>';
+  html+='<div class="mission-progress-bg"><div class="mission-progress-fill" style="width:'+pct.toFixed(0)+'%'+(pct>=100?';background:var(--red)':'')+'"></div></div>';
+  html+='<div class="mission-progress-lbl"><span>สัปดาห์นี้ใช้ไป '+thisSpend.toLocaleString()+' บาท</span><span>เป้า '+budget.toLocaleString()+' บาท</span></div>';
+  var lastWeekStart=new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
+  var lastWeekKey=healthLocalDateStr(lastWeekStart);
+  var lastSpend=computeWeekSpend(member.id,lastWeekStart);
+  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;});
+  if(alreadyClaimed){
+    html+='<div class="mission-sub">✓ เคลมรางวัลสัปดาห์ที่แล้วไปแล้ว</div>';
+  } else if(budget>0 && lastSpend<budget){
+    html+='<button class="w-btn" onclick="claimSaveReward()">🎉 เคลมรางวัลสัปดาห์ที่แล้ว (ใช้ไป '+lastSpend.toLocaleString()+' จากเป้า '+budget.toLocaleString()+')</button>';
+  } else {
+    html+='<div class="mission-sub">สัปดาห์ที่แล้วใช้จ่ายเกินเป้าหมาย ไม่ได้รับรางวัล</div>';
+  }
+  box.innerHTML=html;
+}
+function claimSaveReward(){
+  var member=getCurrentMember(); if(!member) return;
+  var m=getMissions();
+  var thisWeekStart=missionWeekStart(new Date());
+  var lastWeekStart=new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
+  var lastWeekKey=healthLocalDateStr(lastWeekStart);
+  var lastSpend=computeWeekSpend(member.id,lastWeekStart);
+  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;});
+  if(alreadyClaimed){toast('error','เคลมรางวัลสัปดาห์นี้ไปแล้ว');return;}
+  if(lastSpend>=m.settings.saveWeeklyBudget){toast('error','สัปดาห์ที่แล้วใช้จ่ายเกินเป้าหมาย');return;}
+  createMissionClaim(member.id,'save','ประหยัดสำเร็จ สัปดาห์ '+lastWeekKey,m.settings.saveReward,lastWeekKey,null);
+  toast('success','ส่งคำขอรับรางวัลแล้ว รอเจ้าบ้านอนุมัติจ่าย');
+  renderMissions();
+}
+
+// --- วิ่งออกกำลังกาย (GPS) ---
+var missionRun={watching:false,watchId:null,points:[],distanceKm:0,startTime:null,timerInterval:null};
+function haversineKm(lat1,lng1,lat2,lng2){
+  var R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function startRunTracking(){
+  if(!navigator.geolocation){toast('error','อุปกรณ์นี้ไม่รองรับ GPS');return;}
+  if(missionRun.watching) return;
+  missionRun.watching=true; missionRun.points=[]; missionRun.distanceKm=0; missionRun.startTime=Date.now();
+  missionRun.watchId=navigator.geolocation.watchPosition(function(pos){
+    var p={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(missionRun.points.length>0){
+      var prev=missionRun.points[missionRun.points.length-1];
+      var d=haversineKm(prev.lat,prev.lng,p.lat,p.lng);
+      if(d<2) missionRun.distanceKm+=d; // กรองพิกัดกระโดดผิดปกติ
+    }
+    missionRun.points.push(p);
+    updateRunLiveDisplay();
+  },function(err){ toast('error','ไม่สามารถเข้าถึง GPS ได้: '+err.message); },{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
+  missionRun.timerInterval=setInterval(updateRunLiveDisplay,1000);
+  renderMissionRun();
+}
+function updateRunLiveDisplay(){
+  var distEl=document.getElementById('mission-run-dist'), timeEl=document.getElementById('mission-run-time');
+  if(!distEl||!timeEl) return;
+  distEl.textContent=missionRun.distanceKm.toFixed(2)+' กม.';
+  var sec=Math.round((Date.now()-missionRun.startTime)/1000);
+  timeEl.textContent=Math.floor(sec/60).toString().padStart(2,'0')+':'+(sec%60).toString().padStart(2,'0');
+}
+function checkRunWeeklyStreak(memberId){
+  var m=getMissions();
+  var today=new Date(); var weekStart=missionWeekStart(today); var weekKey=healthLocalDateStr(weekStart);
+  var allValid=true;
+  for(var i=0;i<7;i++){
+    var d=new Date(weekStart); d.setDate(d.getDate()+i);
+    if(d>today){allValid=false;break;}
+    var dStr=healthLocalDateStr(d);
+    if(!m.runSessions.some(function(s){return s.memberId===memberId&&s.date===dStr&&s.valid;})){allValid=false;break;}
+  }
+  if(allValid && !m.claims.some(function(c){return c.memberId===memberId&&c.type==='run_streak'&&c.weekKey===weekKey;})){
+    createMissionClaim(memberId,'run_streak','วิ่งครบ 7 วันติดต่อกัน สัปดาห์ '+weekKey,m.settings.runWeeklyBonus,weekKey,null);
+    toast('success','🔥 วิ่งครบ 7 วันติดกัน! ได้โบนัสพิเศษ');
+  }
+}
+function stopRunTracking(){
+  if(!missionRun.watching) return;
+  navigator.geolocation.clearWatch(missionRun.watchId);
+  clearInterval(missionRun.timerInterval);
+  missionRun.watching=false;
+  var durationSec=Math.round((Date.now()-missionRun.startTime)/1000);
+  var distanceKm=Math.round(missionRun.distanceKm*100)/100;
+  var avgSpeedKmh=durationSec>0?(distanceKm/(durationSec/3600)):0;
+  var m=getMissions(); var goal=m.settings.runGoalKm;
+  var valid=distanceKm>=goal && avgSpeedKmh>=2 && avgSpeedKmh<=15;
+  var member=getCurrentMember(); var today=healthLocalDateStr();
+  m.runSessions.push({id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,valid:valid,createdAt:Date.now()});
+  saveMissions(m);
+  if(valid){
+    var hasClaimToday=m.claims.some(function(c){return c.memberId===member.id&&c.type==='run'&&c.date===today;});
+    if(!hasClaimToday){
+      createMissionClaim(member.id,'run','วิ่งครบเป้าวันที่ '+today,m.settings.runDailyReward,null,today);
+      checkRunWeeklyStreak(member.id);
+      toast('success','🏃 วิ่งครบเป้า '+distanceKm.toFixed(2)+' กม.! ส่งคำขอรับรางวัลแล้ว');
+    } else {
+      toast('info','วันนี้รับรางวัลวิ่งไปแล้ว แต่บันทึกการวิ่งนี้ไว้ให้แล้ว');
+    }
+  } else {
+    toast('error','วิ่งได้ '+distanceKm.toFixed(2)+' กม. (เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.) — ยังไม่ผ่านเกณฑ์');
+  }
+  renderMissionRun();
+}
+function renderMissionRun(){
+  var box=document.getElementById('mission-run-body'); if(!box) return;
+  var member=getCurrentMember(); if(!member){box.innerHTML='';return;}
+  var m=getMissions();
+  var weekStart=missionWeekStart(new Date());
+  var dots='';
+  for(var i=0;i<7;i++){
+    var d=new Date(weekStart); d.setDate(d.getDate()+i);
+    var dStr=healthLocalDateStr(d);
+    var hasValid=m.runSessions.some(function(s){return s.memberId===member.id&&s.date===dStr&&s.valid;});
+    dots+='<div class="mission-streak-dot'+(hasValid?' on':'')+'"></div>';
+  }
+  var html='<div class="mission-sub">เป้าหมาย '+m.settings.runGoalKm+' กม./วัน • รางวัล <span class="mission-reward-tag">+'+m.settings.runDailyReward+' USDC/วัน</span> • ครบ 7 วันติด <span class="mission-reward-tag">+'+m.settings.runWeeklyBonus+' USDC</span></div>';
+  html+='<div class="mission-streak-row">'+dots+'</div>';
+  if(missionRun.watching){
+    html+='<div class="mission-run-live"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div></div>';
+    html+='<button class="w-btn" style="background:var(--red)" onclick="stopRunTracking()">⏹ จบการวิ่ง</button>';
+  } else {
+    html+='<button class="w-btn" onclick="startRunTracking()">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
+  }
+  box.innerHTML=html;
+}
+
+// --- ทำบุญ (ถ่ายรูป + GPS) ---
+function handleMeritPhoto(e){
+  var file=e.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas'); var max=480;
+      var w=img.width,h=img.height,scale=Math.min(max/w,max/h,1);
+      canvas.width=Math.round(w*scale); canvas.height=Math.round(h*scale);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      saveMeritEntry(canvas.toDataURL('image/jpeg',0.7));
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function saveMeritEntry(photoData){
+  var member=getCurrentMember(); if(!member) return;
+  toast('info','กำลังบันทึก... กำลังตรวจสอบตำแหน่ง GPS');
+  function finish(lat,lng){
+    var m=getMissions();
+    var today=healthLocalDateStr();
+    var weekKey=healthLocalDateStr(missionWeekStart(new Date()));
+    m.meritLogs.push({id:uid(),memberId:member.id,date:today,photoUrl:photoData,lat:lat,lng:lng,createdAt:Date.now()});
+    var countThisWeek=m.meritLogs.filter(function(l){return l.memberId===member.id && healthLocalDateStr(missionWeekStart(new Date(l.createdAt)))===weekKey;}).length;
+    saveMissions(m);
+    if(countThisWeek<=m.settings.meritMaxPerWeek){
+      createMissionClaim(member.id,'merit','ทำบุญวันที่ '+today,m.settings.meritReward,weekKey,today);
+      toast('success','🙏 บันทึกทำบุญแล้ว ส่งคำขอรับรางวัลแล้ว');
+    } else {
+      toast('info','บันทึกทำบุญแล้ว (ครบโควตารางวัลของสัปดาห์นี้แล้ว)');
+    }
+    renderMissionMerit();
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){finish(pos.coords.latitude,pos.coords.longitude);},function(){finish(null,null);},{timeout:8000});
+  } else { finish(null,null); }
+}
+function renderMissionMerit(){
+  var box=document.getElementById('mission-merit-body'); if(!box) return;
+  var member=getCurrentMember(); if(!member){box.innerHTML='';return;}
+  var m=getMissions();
+  var mine=m.meritLogs.filter(function(l){return l.memberId===member.id;}).sort(function(a,b){return b.createdAt-a.createdAt;}).slice(0,6);
+  var html='<div class="mission-sub">ถ่ายรูปตอนไปทำบุญ ระบบจะแนบตำแหน่ง GPS อัตโนมัติ • รางวัล <span class="mission-reward-tag">+'+m.settings.meritReward+' USDC/ครั้ง</span> (จำกัด '+m.settings.meritMaxPerWeek+' ครั้ง/สัปดาห์)</div>';
+  html+='<button class="w-btn" style="margin-bottom:10px" onclick="document.getElementById(\'merit-photo-file\').click()">📷 ถ่ายรูปทำบุญ</button>';
+  if(mine.length) html+='<div class="mission-merit-grid">'+mine.map(function(l){return '<img class="mission-merit-thumb" src="'+l.photoUrl+'">';}).join('')+'</div>';
+  box.innerHTML=html;
+}
+
+// --- รางวัลที่รอจ่าย (เจ้าบ้านอนุมัติ+จ่ายจริง on-chain) ---
+function renderMissionClaims(){
+  var card=document.getElementById('mission-claims-card'), box=document.getElementById('mission-claims-body');
+  if(!card||!box) return;
+  var me=getCurrentMember();
+  if(!me||me.role!=='เจ้าบ้าน'){ card.style.display='none'; return; }
+  var m=getMissions();
+  var pending=m.claims.filter(function(c){return c.status==='pending';}).sort(function(a,b){return a.createdAt-b.createdAt;});
+  if(pending.length===0){ card.style.display='none'; return; }
+  card.style.display='block';
+  box.innerHTML=pending.map(function(c){
+    var mem=getMember(c.memberId);
+    return '<div class="mission-claim-row">'+(mem?avatarHTML(mem,32):'')+
+      '<div style="flex:1;min-width:0"><div style="font-size:.72rem;font-weight:700">'+(mem?mem.name:'')+'</div><div style="font-size:.62rem;color:var(--fg-m)">'+c.label+'</div></div>'+
+      '<div class="mission-claim-amt">+'+c.amount.toFixed(2)+'</div>'+
+      '<button type="button" class="s-btn" style="width:auto;padding:6px 12px;flex:0 0 auto" onclick="payMissionClaim(\''+c.id+'\')">จ่าย</button></div>';
+  }).join('');
+}
+function payMissionClaim(claimId){
+  var m=getMissions();
+  var claim=m.claims.find(function(c){return c.id===claimId;});
+  if(!claim||claim.status!=='pending') return;
+  var me=getCurrentMember();
+  if(!me||me.role!=='เจ้าบ้าน'){toast('error','เฉพาะเจ้าบ้านเท่านั้นที่จ่ายรางวัลได้');return;}
+  var member=getMember(claim.memberId);
+  if(!member){toast('error','ไม่พบสมาชิก');return;}
+  if(!connectedWalletAddress){toast('error','กรุณาเชื่อมต่อ Wallet ของเจ้าบ้านก่อนจ่ายรางวัล');return;}
+  if(!member.walletAddress){toast('error',member.name+' ยังไม่ได้ผูก Wallet — ไม่สามารถจ่ายรางวัลได้');return;}
+  if(!confirm('ยืนยันจ่าย '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำหรับ "'+claim.label+'" ใช่หรือไม่?')) return;
+  toast('info','กำลังส่งธุรกรรม...');
+  sendOnchainUSDC(member.walletAddress, claim.amount).then(function(tx){
+    return (tx && tx.wait) ? tx.wait() : tx;
+  }).then(function(){
+    addTransaction(state.currentUserId, member.id, claim.amount, '🪙 รางวัลภารกิจ: '+claim.label, '', 'รางวัลภารกิจ', '');
+    claim.status='paid'; claim.paidAt=Date.now();
+    saveMissions(m);
+    toast('success','จ่ายรางวัล '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำเร็จ!');
+    renderMissionClaims();
+  }).catch(function(err){
+    toast('error','จ่ายรางวัลไม่สำเร็จ: '+(err&&err.message?err.message:err));
+  });
+}
+
+// --- ตั้งค่ารางวัล (เจ้าบ้านเท่านั้น) ---
+function renderMissionSettings(){
+  var card=document.getElementById('mission-settings-card'); if(!card) return;
+  var me=getCurrentMember();
+  if(!me||me.role!=='เจ้าบ้าน'){ card.style.display='none'; return; }
+  card.style.display='block';
+  var m=getMissions();
+  document.getElementById('ms-save-budget').value=m.settings.saveWeeklyBudget;
+  document.getElementById('ms-save-reward').value=m.settings.saveReward;
+  document.getElementById('ms-run-goal').value=m.settings.runGoalKm;
+  document.getElementById('ms-run-reward').value=m.settings.runDailyReward;
+  document.getElementById('ms-run-bonus').value=m.settings.runWeeklyBonus;
+  document.getElementById('ms-merit-reward').value=m.settings.meritReward;
+  document.getElementById('ms-merit-max').value=m.settings.meritMaxPerWeek;
+}
+function saveMissionSettings(){
+  var me=getCurrentMember();
+  if(!me||me.role!=='เจ้าบ้าน'){toast('error','เฉพาะเจ้าบ้านเท่านั้นที่ตั้งค่าได้');return;}
+  var m=getMissions();
+  m.settings.saveWeeklyBudget=parseFloat(document.getElementById('ms-save-budget').value)||0;
+  m.settings.saveReward=parseFloat(document.getElementById('ms-save-reward').value)||0;
+  m.settings.runGoalKm=parseFloat(document.getElementById('ms-run-goal').value)||0;
+  m.settings.runDailyReward=parseFloat(document.getElementById('ms-run-reward').value)||0;
+  m.settings.runWeeklyBonus=parseFloat(document.getElementById('ms-run-bonus').value)||0;
+  m.settings.meritReward=parseFloat(document.getElementById('ms-merit-reward').value)||0;
+  m.settings.meritMaxPerWeek=parseInt(document.getElementById('ms-merit-max').value)||1;
+  saveMissions(m);
+  toast('success','บันทึกการตั้งค่ารางวัลแล้ว');
+  renderMissions();
 }
 
 // ============================================================
