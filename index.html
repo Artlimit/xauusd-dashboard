@@ -391,7 +391,7 @@
     .health-done-btn.active{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.4);color:var(--green)}
 
     /* Missions */
-    .mission-banner{display:flex;align-items:center;gap:12px;margin:0 20px 18px;padding:14px 16px;border-radius:16px;
+    .mission-banner{display:flex;align-items:center;gap:12px;margin:8px 20px 24px;padding:14px 16px;border-radius:16px;
       background:linear-gradient(135deg,rgba(251,191,36,.18),rgba(139,95,207,.18));border:1px solid rgba(251,191,36,.3);cursor:pointer}
     .mission-banner-icon{font-size:1.6rem;flex-shrink:0}
     .mission-banner-title{font-size:.85rem;font-weight:800}
@@ -2530,8 +2530,8 @@ function renderMain(){
     var doFetch = function() {
       fetchOnchainUSDCBalance(member.walletAddress).then(function(bal){
         if (bal === null) {
-          document.getElementById('balanceDisplay').textContent='—';
-          if(thbEquivEl) thbEquivEl.textContent='โหลดไม่ได้ — กด 🔄 เพื่อลองใหม่';
+          document.getElementById('balanceDisplay').textContent='0.00';
+          if(thbEquivEl) thbEquivEl.textContent='⚠️ โหลดยอดจาก Blockchain ไม่ได้ — กด 🔄 เพื่อลองใหม่';
           return;
         }
         acc.balance = bal;
@@ -2543,8 +2543,8 @@ function renderMain(){
         }
       }).catch(function(e){
         console.error('fetchBalance error',e);
-        document.getElementById('balanceDisplay').textContent='—';
-        if(thbEquivEl) thbEquivEl.textContent='โหลดไม่ได้ — กด 🔄 เพื่อลองใหม่';
+        document.getElementById('balanceDisplay').textContent='0.00';
+        if(thbEquivEl) thbEquivEl.textContent='⚠️ โหลดยอดจาก Blockchain ไม่ได้ — กด 🔄 เพื่อลองใหม่';
       });
     };
 
