@@ -372,6 +372,23 @@
     .trip-photo-upload-text{text-align:left}
     .trip-photo-upload-title{font-size:.75rem;font-weight:700;color:var(--fg)}
     .trip-photo-upload-sub{font-size:.62rem;color:var(--fg-m)}
+
+    /* Health */
+    .health-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;cursor:pointer}
+    .health-card.is-due{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.06)}
+    .health-card-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+    .health-icon{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,rgba(139,95,207,.25),rgba(52,211,153,.25));
+      display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
+    .health-name{font-size:.95rem;font-weight:800}
+    .health-sub{font-size:.68rem;color:var(--fg-m);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+    .health-del{margin-left:auto;background:none;border:none;color:var(--red);font-size:.68rem;cursor:pointer;padding:6px}
+    .health-badge{display:inline-block;font-size:.62rem;padding:3px 9px;border-radius:999px;background:rgba(139,95,207,.15);color:var(--purple-light)}
+    .health-badge.done{background:rgba(52,211,153,.15);color:var(--green)}
+    .health-badge.due{background:rgba(248,113,113,.18);color:var(--red)}
+    .health-note{font-size:.68rem;color:var(--fg-m);margin-top:8px;line-height:1.5}
+    .health-actions{display:flex;gap:10px;margin-top:10px}
+    .health-done-btn{flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--fg-m);font-family:inherit;font-size:.7rem;cursor:pointer}
+    .health-done-btn.active{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.4);color:var(--green)}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -696,6 +713,54 @@
       <div style="display:flex;gap:10px">
         <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAddTrip()">ยกเลิก</button>
         <button type="button" class="w-btn" onclick="submitTrip()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen health-screen" id="scr-health">
+    <div class="page-hdr">
+      <button class="page-back" onclick="navigate('main')">‹</button>
+      <span class="page-title">สุขภาพ</span>
+    </div>
+    <p style="font-size:.65rem;color:var(--fg-m);text-align:center;padding:0 20px 14px;line-height:1.6">
+      บันทึกนัดหมอ ยาที่ต้องกิน วัคซีน และแผนออกกำลังกายของสมาชิกในครอบครัว พร้อมแจ้งเตือนเมื่อถึงเวลา
+    </p>
+    <div id="health-list" style="padding:0 20px"></div>
+    <div style="padding:0 20px 20px">
+      <button class="w-btn" onclick="openAddHealth()">＋ เพิ่มรายการสุขภาพ</button>
+    </div>
+  </div>
+
+  <!-- Add/Edit Health Modal -->
+  <div class="sheet-overlay" id="modal-health" onclick="closeHealthOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" id="health-modal-title">🩺 เพิ่มรายการสุขภาพ</div>
+      <input class="w-input" id="health-name" placeholder="ชื่อรายการ เช่น นัดหมอฟัน, กินยาลดความดัน" style="margin-bottom:12px">
+      <select class="w-input" id="health-type" style="margin-bottom:12px">
+        <option value="appointment">🩺 นัดหมอ</option>
+        <option value="medicine">💊 กินยา</option>
+        <option value="vaccine">💉 ฉีดวัคซีน</option>
+        <option value="exercise">🏃 ออกกำลังกาย</option>
+        <option value="checkup">🩻 ตรวจสุขภาพประจำปี</option>
+      </select>
+      <select class="w-input" id="health-member" style="margin-bottom:12px"></select>
+      <select class="w-input" id="health-freq" style="margin-bottom:12px" onchange="updateHealthDateRequirement()">
+        <option value="once">ครั้งเดียว</option>
+        <option value="daily">ซ้ำทุกวัน</option>
+        <option value="weekly">ซ้ำทุกสัปดาห์</option>
+      </select>
+      <div id="health-date-label" style="font-size:.62rem;color:var(--fg-m);margin-bottom:6px">วันที่ & เวลา</div>
+      <div style="display:flex;gap:10px;margin-bottom:4px">
+        <input class="w-input" id="health-date" type="date" style="flex:1">
+        <input class="w-input" id="health-time" type="time" style="flex:1">
+      </div>
+      <div id="health-date-hint" style="font-size:.6rem;color:var(--purple-light);margin-bottom:12px;line-height:1.5"></div>
+      <input class="w-input" id="health-place" placeholder="สถานที่ / โรงพยาบาล (ถ้ามี)" style="margin-bottom:12px">
+      <textarea class="w-input" id="health-note" placeholder="โน้ตเพิ่มเติม" style="margin-bottom:16px;min-height:60px;resize:vertical"></textarea>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAddHealth()">ยกเลิก</button>
+        <button type="button" class="w-btn" onclick="submitHealth()">บันทึก</button>
       </div>
     </div>
   </div>
@@ -1332,7 +1397,7 @@
         <line x1="17" y1="18" x2="21" y2="18"/><line x1="17" y1="21" x2="21" y2="21"/>
       </svg>
     </button>
-    <button class="bn-item" data-tab="family" onclick="navigate('family')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span>ครอบครัว</span></button>
+    <button class="bn-item" data-tab="health" onclick="navigate('health')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg><span>สุขภาพ</span></button>
     <button class="bn-item" data-tab="profile" onclick="navigate('profile')"><svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>โปรไฟล์</span></button>
   </nav>
 
@@ -1366,7 +1431,7 @@ function save(key, data) {
 // BLOCKCHAIN / BITGET WALLET INTEGRATION
 // ============================================================
 // Constants ต้องอยู่ก่อน blockchain code ที่อ้างอิงมัน
-var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain' };
+var KEYS = { family:'pp_family', members:'pp_members', accounts:'pp_accounts', tx:'pp_transactions', current:'pp_current', chain:'pp_chain', health:'pp_health' };
 var COLORS = ['#c084fc','#f472b6','#34d399','#fbbf24','#60a5fa','#f87171','#a78bfa','#fb923c'];
 var ROLES = ['เจ้าบ้าน','แม่บ้าน','ลูกชาย','ลูกสาว','ปู่','ย่า','ตา','ยาย','สมาชิก','ผู้ดูแล'];
 
@@ -2120,7 +2185,7 @@ function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active','screen-fade-in');});
   var scr=document.getElementById('scr-'+screenId);
   if(scr){scr.classList.add('active','screen-fade-in');}
-  var navScreens=['main','history','family','profile','travel'];
+  var navScreens=['main','history','family','health','profile','travel'];
   document.getElementById('bot-nav').style.display=navScreens.includes(screenId)?'flex':'none';
   var fab=document.getElementById('agent-fab'); if(fab) fab.style.display=(screenId==='main')?'flex':'none';
   document.querySelectorAll('.bn-item').forEach(function(b){b.classList.toggle('active',b.dataset.tab===screenId);});
@@ -2130,6 +2195,7 @@ function navigate(screenId) {
   if(screenId==='profile')renderProfile();
   if(screenId==='chart')renderChart();
   if(screenId==='travel')renderTravel();
+  if(screenId==='health')renderHealth();
   closeAllModals();
 }
 
@@ -2346,6 +2412,7 @@ function startPinCheck(memberId){
       navigate('main');
       resumeGPSIfNeeded();
       startAgentPolling();
+      startHealthReminders();
       if(connectedWalletAddress) setTimeout(startAutoRefresh,800);
     } else {
       pinError();toast('error','PIN ไม่ถูกต้อง');
@@ -4520,6 +4587,214 @@ function deleteTrip(id){
 }
 
 // ============================================================
+// สุขภาพ — วางแผน/แจ้งเตือนสุขภาพของสมาชิกในครอบครัว
+// ============================================================
+var HEALTH_TYPES = {
+  appointment:{icon:'🩺',label:'นัดหมอ'},
+  medicine:{icon:'💊',label:'กินยา'},
+  vaccine:{icon:'💉',label:'ฉีดวัคซีน'},
+  exercise:{icon:'🏃',label:'ออกกำลังกาย'},
+  checkup:{icon:'🩻',label:'ตรวจสุขภาพ'}
+};
+var HEALTH_FREQ_LABEL = {once:'ครั้งเดียว',daily:'ซ้ำทุกวัน',weekly:'ซ้ำทุกสัปดาห์'};
+var _healthEditingId=null;
+function getHealthList(){ return load(KEYS.health,[]); }
+function saveHealthList(list){ save(KEYS.health,list); }
+var THAI_WEEKDAYS=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+function healthLocalDateStr(d){
+  d=d||new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function healthTimeMinutes(t){
+  if(!t) return null;
+  var p=t.split(':'); return parseInt(p[0],10)*60+parseInt(p[1],10);
+}
+// ถึงเวลาของรอบล่าสุดหรือยัง (ใช้แสดงผลบนการ์ด ไม่เกี่ยวกับว่าเคยแจ้งเตือนไปแล้วหรือยัง)
+function healthDue(item){
+  if(!item.time) return false;
+  var now=new Date();
+  var todayLocal=healthLocalDateStr(now);
+  var nowMin=now.getHours()*60+now.getMinutes();
+  var itemMin=healthTimeMinutes(item.time);
+  if(item.freq==='daily'){
+    if(item.date && item.date>todayLocal) return false; // ยังไม่ถึงวันเริ่ม
+    return nowMin>=itemMin;
+  }
+  if(item.freq==='weekly'){
+    if(!item.date) return false;
+    if(now.getDay()!==new Date(item.date+'T00:00:00').getDay()) return false;
+    return nowMin>=itemMin;
+  }
+  if(!item.date) return false;
+  var dt=new Date(item.date+'T'+item.time+':00');
+  return dt.getTime()<=now.getTime();
+}
+// ถึงเวลาต้อง "แจ้งเตือนใหม่" หรือยัง (สำหรับรายการซ้ำ จะรีเซ็ตทุกวัน/ทุกสัปดาห์)
+function healthDueForAlert(item){
+  if(!healthDue(item)) return false;
+  var todayLocal=healthLocalDateStr();
+  if(item.freq==='once') return !item.alerted;
+  return item.lastAlertDate!==todayLocal;
+}
+function healthScheduleLabel(h){
+  if(h.freq==='daily') return 'ทุกวัน '+(h.time||'');
+  if(h.freq==='weekly'){
+    var dow=h.date?THAI_WEEKDAYS[new Date(h.date+'T00:00:00').getDay()]:'';
+    return 'ทุกสัปดาห์'+(dow?(' ('+dow+')'):'')+' '+(h.time||'');
+  }
+  return h.date?formatHealthDate(h.date,h.time):'';
+}
+function renderHealth(){
+  var box=document.getElementById('health-list');
+  var list=getHealthList().slice().sort(function(a,b){
+    return new Date(a.date+'T'+(a.time||'00:00')) - new Date(b.date+'T'+(b.time||'00:00'));
+  });
+  if(list.length===0){
+    box.innerHTML='<div class="agent-empty">ยังไม่มีรายการสุขภาพที่บันทึกไว้<br>กด "+ เพิ่มรายการสุขภาพ" ด้านล่างเพื่อเริ่มต้น</div>';
+    return;
+  }
+  box.innerHTML='';
+  list.forEach(function(h){
+    var t=HEALTH_TYPES[h.type]||HEALTH_TYPES.appointment;
+    var member=getMember(h.memberId);
+    var due=!h.done && healthDue(h);
+    var card=document.createElement('div');
+    card.className='health-card'+(due?' is-due':'');
+    card.innerHTML=
+      '<div class="health-card-top">'+
+        '<div class="health-icon">'+t.icon+'</div>'+
+        '<div style="flex:1;min-width:0"><div class="health-name">'+h.name+'</div>'+
+        '<div class="health-sub">'+
+          (member?('<span>'+avatarHTML(member,18)+'</span><span>'+member.name+'</span>'):'')+
+          '<span>'+healthScheduleLabel(h)+'</span>'+
+        '</div></div>'+
+        '<button type="button" class="health-del" onclick="event.stopPropagation();deleteHealth(\''+h.id+'\')">ลบ</button>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<span class="health-badge">'+HEALTH_FREQ_LABEL[h.freq||'once']+'</span>'+
+        (h.place?('<span class="health-badge">📍 '+h.place+'</span>'):'')+
+        (h.done?'<span class="health-badge done">✓ เสร็จแล้ว</span>':(due?'<span class="health-badge due">ถึงเวลาแล้ว</span>':''))+
+      '</div>'+
+      (h.note?'<div class="health-note">'+h.note+'</div>':'')+
+      '<div class="health-actions">'+
+        '<button type="button" class="health-done-btn'+(h.done?' active':'')+'" onclick="event.stopPropagation();toggleHealthDone(\''+h.id+'\')">'+(h.done?'✓ เสร็จแล้ว':'ทำเครื่องหมายว่าเสร็จ')+'</button>'+
+      '</div>';
+    card.onclick=function(){ openAddHealth(h.id); };
+    box.appendChild(card);
+  });
+}
+function formatHealthDate(dateStr,timeStr){
+  var d=new Date(dateStr+'T'+(timeStr||'00:00')+':00');
+  var dd=d.getDate(), mm=d.getMonth()+1, yy=d.getFullYear();
+  var hm=timeStr?(' '+timeStr):'';
+  return dd+'/'+mm+'/'+yy+hm;
+}
+function populateHealthMemberSelect(selectedId){
+  var sel=document.getElementById('health-member');
+  var members=getMembers();
+  sel.innerHTML=members.map(function(m){return '<option value="'+m.id+'">'+m.name+'</option>';}).join('');
+  if(selectedId) sel.value=selectedId;
+}
+function openAddHealth(editId){
+  _healthEditingId=editId||null;
+  var editing=_healthEditingId?getHealthList().find(function(h){return h.id===_healthEditingId;}):null;
+  document.getElementById('health-modal-title').textContent=editing?'🩺 แก้ไขรายการสุขภาพ':'🩺 เพิ่มรายการสุขภาพ';
+  document.getElementById('health-name').value=editing?editing.name:'';
+  document.getElementById('health-type').value=editing?editing.type:'appointment';
+  populateHealthMemberSelect(editing?editing.memberId:(getCurrentMember()?getCurrentMember().id:''));
+  document.getElementById('health-date').value=editing?(editing.date||''):'';
+  document.getElementById('health-time').value=editing?(editing.time||''):'';
+  document.getElementById('health-freq').value=editing?(editing.freq||'once'):'once';
+  updateHealthDateRequirement();
+  document.getElementById('health-place').value=editing?(editing.place||''):'';
+  document.getElementById('health-note').value=editing?(editing.note||''):'';
+  document.getElementById('modal-health').classList.add('open');
+}
+function hideAddHealth(){ document.getElementById('modal-health').classList.remove('open'); _healthEditingId=null; }
+function closeHealthOutside(e){ if(e.target===e.currentTarget) hideAddHealth(); }
+function updateHealthDateRequirement(){
+  var freq=document.getElementById('health-freq').value;
+  var dateInput=document.getElementById('health-date');
+  var hint=document.getElementById('health-date-hint');
+  if(freq==='daily'){
+    dateInput.removeAttribute('required');
+    hint.textContent='ไม่บังคับกรอกวันที่ — ถ้าไม่ระบุ จะเริ่มเตือนทุกวันตามเวลานี้ทันที (ใส่ไว้ถ้าอยากเริ่มเตือนในวันที่กำหนดล่วงหน้า)';
+  } else if(freq==='weekly'){
+    dateInput.setAttribute('required','required');
+    hint.textContent='จะเตือนซ้ำทุกสัปดาห์ ในวันเดียวกับที่เลือกนี้ เวลาเดิม';
+  } else {
+    dateInput.setAttribute('required','required');
+    hint.textContent='';
+  }
+}
+function submitHealth(){
+  var name=document.getElementById('health-name').value.trim();
+  if(!name){ toast('error','กรุณากรอกชื่อรายการ'); return; }
+  var type=document.getElementById('health-type').value;
+  var memberId=document.getElementById('health-member').value;
+  var date=document.getElementById('health-date').value;
+  var time=document.getElementById('health-time').value;
+  var freq=document.getElementById('health-freq').value;
+  var place=document.getElementById('health-place').value.trim();
+  var note=document.getElementById('health-note').value.trim();
+  if(!time){ toast('error','กรุณาระบุเวลา'); return; }
+  if(freq!=='daily' && !date){ toast('error','กรุณาระบุวันที่'); return; }
+  var list=getHealthList();
+  if(_healthEditingId){
+    var h=list.find(function(x){return x.id===_healthEditingId;});
+    if(h){ h.name=name; h.type=type; h.memberId=memberId; h.date=date; h.time=time; h.freq=freq; h.place=place; h.note=note; h.alerted=false; h.lastAlertDate=''; }
+    toast('success','แก้ไขรายการสุขภาพแล้ว');
+  } else {
+    list.push({id:uid(),name:name,type:type,memberId:memberId,date:date,time:time,freq:freq,place:place,note:note,done:false,alerted:false,lastAlertDate:'',createdAt:Date.now()});
+    toast('success','เพิ่มรายการสุขภาพแล้ว');
+  }
+  saveHealthList(list);
+  hideAddHealth();
+  renderHealth();
+}
+function deleteHealth(id){
+  saveHealthList(getHealthList().filter(function(h){return h.id!==id;}));
+  renderHealth();
+}
+function toggleHealthDone(id){
+  var list=getHealthList();
+  var h=list.find(function(x){return x.id===id;});
+  if(h){ h.done=!h.done; if(h.done) h.alerted=true; }
+  saveHealthList(list);
+  renderHealth();
+}
+// เช็กรายการที่ถึงเวลาแล้วแต่ยังไม่แจ้งเตือน — เตือนด้วย toast (และ Notification ถ้าเบราว์เซอร์อนุญาต)
+function checkHealthReminders(){
+  var list=getHealthList();
+  var changed=false;
+  var todayLocal=healthLocalDateStr();
+  list.forEach(function(h){
+    if(h.done) return;
+    if(!healthDueForAlert(h)) return;
+    var member=getMember(h.memberId);
+    var t=HEALTH_TYPES[h.type]||HEALTH_TYPES.appointment;
+    var msg=t.icon+' '+h.name+(member?(' — '+member.name):'');
+    toast('info',msg);
+    if(window.Notification && Notification.permission==='granted'){
+      try{ new Notification('แจ้งเตือนสุขภาพ',{body:msg}); }catch(e){}
+    }
+    if(h.freq==='once'){ h.alerted=true; } else { h.lastAlertDate=todayLocal; }
+    changed=true;
+  });
+  if(changed) saveHealthList(list);
+}
+var _healthRemindersStarted=false;
+function startHealthReminders(){
+  if(_healthRemindersStarted) return;
+  _healthRemindersStarted=true;
+  if(window.Notification && Notification.permission==='default'){
+    try{ Notification.requestPermission(); }catch(e){}
+  }
+  checkHealthReminders();
+  setInterval(checkHealthReminders,60000);
+}
+
+// ============================================================
 // เริ่มต้น — แก้ปัญหาหน้าดำ
 // ============================================================
 function init(){
@@ -4539,6 +4814,7 @@ function init(){
       navigate('main');
       resumeGPSIfNeeded();
       startAgentPolling();
+      startHealthReminders();
     } else {
       showLogin();
     }
