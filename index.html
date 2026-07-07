@@ -362,6 +362,16 @@
     .trip-progress-bg{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:6px}
     .trip-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),var(--purple-light))}
     .trip-progress-lbl{display:flex;justify-content:space-between;font-size:.68rem;color:var(--fg-m)}
+    .trip-photo-upload{border:2px dashed rgba(139,95,207,.3);background:transparent;border-radius:14px;
+      display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;margin-bottom:12px;
+      cursor:pointer;transition:border-color .2s,background .2s}
+    .trip-photo-upload:hover{border-color:var(--purple-mid);background:rgba(139,95,207,.05)}
+    .trip-photo-upload:active{transform:scale(.98)}
+    .trip-photo-upload-icon{width:34px;height:34px;border-radius:10px;background:rgba(139,95,207,.15);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .trip-photo-upload-text{text-align:left}
+    .trip-photo-upload-title{font-size:.75rem;font-weight:700;color:var(--fg)}
+    .trip-photo-upload-sub{font-size:.62rem;color:var(--fg-m)}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -663,6 +673,16 @@
       <div id="trip-fetch-status" style="font-size:.62rem;color:var(--fg-m);margin-bottom:8px;display:none"></div>
       <div id="trip-photo-preview" style="display:none;margin-bottom:12px">
         <img id="trip-photo-img" style="width:100%;height:130px;object-fit:cover;border-radius:12px">
+      </div>
+      <input type="file" id="trip-photo-file" accept="image/*" style="display:none" onchange="handleTripPhoto(event)">
+      <div class="trip-photo-upload" onclick="document.getElementById('trip-photo-file').click()">
+        <div class="trip-photo-upload-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="trip-photo-upload-text">
+          <div class="trip-photo-upload-title">แนบรูปเอง</div>
+          <div class="trip-photo-upload-sub">ถ้าค้นหาอัตโนมัติไม่เจอรูป หรืออยากใช้รูปของตัวเอง</div>
+        </div>
       </div>
       <input type="hidden" id="trip-photo-url">
       <input type="hidden" id="trip-lat">
@@ -4402,6 +4422,28 @@ function openAddTrip(editId){
 }
 function hideAddTrip(){ document.getElementById('modal-trip').classList.remove('open'); _tripEditingId=null; }
 function closeTripOutside(e){ if(e.target===e.currentTarget) hideAddTrip(); }
+function handleTripPhoto(e){
+  var file=e.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');
+      var max=480; // ใหญ่กว่ารูปโปรไฟล์เพราะใช้เป็นรูปปกการ์ด ไม่ใช่ avatar วงกลมเล็ก
+      var w=img.width,h=img.height,scale=Math.min(max/w,max/h,1);
+      canvas.width=Math.round(w*scale); canvas.height=Math.round(h*scale);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      var data=canvas.toDataURL('image/jpeg',0.75);
+      document.getElementById('trip-photo-url').value=data;
+      document.getElementById('trip-photo-img').src=data;
+      document.getElementById('trip-photo-preview').style.display='block';
+      toast('success','แนบรูปแล้ว');
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
 
 // ค้นหาที่อยู่+รูปสถานที่อัตโนมัติ ใช้ Nominatim (OpenStreetMap, ฟรี ไม่ต้องมี API key) + Wikipedia REST API (ฟรี)
 function autoFetchTripInfo(){
