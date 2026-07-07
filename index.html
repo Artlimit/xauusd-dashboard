@@ -6,6 +6,9 @@
   <title>PuppyPocket — กระเป๋าครอบครัว</title>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Leaflet (ใช้แสดงแผนที่เส้นทางการวิ่งในภารกิจสุขภาพ) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <!-- Firebase (ใช้สำหรับซิงค์รหัสครอบครัว + ตำแหน่ง GPS ข้ามเครื่อง) -->
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -851,6 +854,17 @@
       <div class="mission-set-row"><label>รางวัลทำบุญ (USDC/ครั้ง)</label><input class="w-input" id="ms-merit-reward" type="number" step="0.01"></div>
       <div class="mission-set-row"><label>จำกัดทำบุญที่นับได้ (ครั้ง/สัปดาห์)</label><input class="w-input" id="ms-merit-max" type="number" step="1"></div>
       <button class="w-btn" onclick="saveMissionSettings()">บันทึกการตั้งค่า</button>
+    </div>
+  </div>
+
+  <!-- แผนที่เส้นทางการวิ่ง -->
+  <div class="sheet-overlay" id="modal-run-map" onclick="closeRunMapOutside(event)">
+    <div class="sheet" style="padding-bottom:16px">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" style="margin-bottom:2px">🗺️ เส้นทางการวิ่ง</div>
+      <div id="run-map-stats" style="font-size:.68rem;color:var(--fg-m);margin-bottom:12px"></div>
+      <div id="run-map" style="width:100%;height:300px;border-radius:14px;overflow:hidden;background:#1a1030"></div>
+      <button class="w-btn" style="margin-top:14px" onclick="hideRunMapModal()">ปิด</button>
     </div>
   </div>
 
@@ -5010,13 +5024,24 @@ function startRunTracking(){
   if(missionRun.watching) return;
   missionRun.watching=true; missionRun.points=[]; missionRun.distanceKm=0; missionRun.startTime=Date.now();
   missionRun.watchId=navigator.geolocation.watchPosition(function(pos){
-    var p={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    var acc=pos.coords.accuracy; // ความแม่นยำเป็นเมตร ยิ่งน้อยยิ่งแม่น
+    if(typeof acc==='number' && acc>25){ return; } // สัญญาณ GPS แม่นยำไม่พอ (เช่น ในตึก/ใต้ต้นไม้) ข้ามจุดนี้ไปเลย ไม่นับระยะ
+    var p={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now()};
     if(missionRun.points.length>0){
       var prev=missionRun.points[missionRun.points.length-1];
       var d=haversineKm(prev.lat,prev.lng,p.lat,p.lng);
-      if(d<2) missionRun.distanceKm+=d; // กรองพิกัดกระโดดผิดปกติ
+      var dtHr=(p.t-prev.t)/3600000;
+      var impliedSpeed = dtHr>0 ? (d/dtHr) : 0;
+      var isNoiseJitter = d<0.004; // เดินอยู่กับที่ GPS สั่นไหวไม่เกิน ~4 เมตร ไม่นับ
+      var isSpeedSpike = impliedSpeed>20; // เร็วเกินสมเหตุสมผลสำหรับวิ่ง แสดงว่าพิกัดกระโดดผิดปกติ
+      if(!isNoiseJitter && !isSpeedSpike){
+        missionRun.distanceKm+=d;
+        missionRun.points.push(p);
+      }
+      // ถ้าเป็น noise/spike ไม่บันทึกจุดใหม่ ให้เทียบกับจุดล่าสุดที่ยังเชื่อถือได้ต่อไป
+    } else {
+      missionRun.points.push(p);
     }
-    missionRun.points.push(p);
     updateRunLiveDisplay();
   },function(err){ toast('error','ไม่สามารถเข้าถึง GPS ได้: '+err.message); },{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
   missionRun.timerInterval=setInterval(updateRunLiveDisplay,1000);
@@ -5055,7 +5080,9 @@ function stopRunTracking(){
   var m=getMissions(); var goal=m.settings.runGoalKm;
   var valid=distanceKm>=goal && avgSpeedKmh>=2 && avgSpeedKmh<=15;
   var member=getCurrentMember(); var today=healthLocalDateStr();
-  m.runSessions.push({id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,valid:valid,createdAt:Date.now()});
+  var route=decimateRoute(missionRun.points,150);
+  var session={id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,valid:valid,route:route,createdAt:Date.now()};
+  m.runSessions.push(session);
   saveMissions(m);
   if(valid){
     var hasClaimToday=m.claims.some(function(c){return c.memberId===member.id&&c.type==='run'&&c.date===today;});
@@ -5070,6 +5097,7 @@ function stopRunTracking(){
     toast('error','วิ่งได้ '+distanceKm.toFixed(2)+' กม. (เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.) — ยังไม่ผ่านเกณฑ์');
   }
   renderMissionRun();
+  showRunRouteModal(route, distanceKm.toFixed(2)+' กม. • '+formatRunDuration(durationSec)+' • เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.'+(valid?' • ✅ ผ่านเกณฑ์':' • ยังไม่ผ่านเกณฑ์'));
 }
 function renderMissionRun(){
   var box=document.getElementById('mission-run-body'); if(!box) return;
@@ -5091,8 +5119,61 @@ function renderMissionRun(){
   } else {
     html+='<button class="w-btn" onclick="startRunTracking()">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
   }
+  var recent=m.runSessions.filter(function(s){return s.memberId===member.id;}).sort(function(a,b){return b.createdAt-a.createdAt;}).slice(0,5);
+  if(recent.length){
+    html+='<div style="margin-top:14px;font-size:.68rem;color:var(--fg-m);font-weight:700">ประวัติล่าสุด</div>';
+    html+=recent.map(function(s){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'+
+        '<span style="font-size:.68rem;color:var(--fg-m);flex-shrink:0">'+s.date+'</span>'+
+        '<span style="font-size:.72rem;font-weight:700;flex:1">'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+'</span>'+
+        '<span style="font-size:.62rem">'+(s.valid?'✅':'⚠️')+'</span>'+
+        (s.route&&s.route.length>1?'<button type="button" class="s-btn" style="width:auto;padding:5px 10px;flex:0 0 auto" onclick=\'showRunRouteModal(JSON.parse(this.dataset.route),"'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+'")\' data-route=\''+JSON.stringify(s.route)+'\'>🗺️</button>':'')+
+      '</div>';
+    }).join('');
+  }
   box.innerHTML=html;
 }
+function formatRunDuration(sec){
+  var m2=Math.floor(sec/60), s2=sec%60;
+  return m2+' นาที '+s2+' วิ';
+}
+function decimateRoute(points,maxPoints){
+  var pts=(points||[]).map(function(p){return {lat:p.lat,lng:p.lng};});
+  if(pts.length<=maxPoints) return pts;
+  var step=pts.length/maxPoints, out=[];
+  for(var i=0;i<maxPoints;i++){ out.push(pts[Math.floor(i*step)]); }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+var _runMapInstance=null;
+function showRunRouteModal(points, statsText){
+  document.getElementById('modal-run-map').classList.add('open');
+  document.getElementById('run-map-stats').textContent = statsText||'';
+  var mapEl=document.getElementById('run-map');
+  setTimeout(function(){
+    if(!points || points.length<2){
+      mapEl.innerHTML='<div style="padding:60px 20px;text-align:center;color:var(--fg-m);font-size:.72rem">ข้อมูลเส้นทางไม่พอสำหรับแสดงแผนที่</div>';
+      return;
+    }
+    if(typeof L==='undefined'){
+      mapEl.innerHTML='<div style="padding:60px 20px;text-align:center;color:var(--fg-m);font-size:.72rem">โหลดแผนที่ไม่ได้ — ต้องเชื่อมต่ออินเทอร์เน็ต</div>';
+      return;
+    }
+    mapEl.innerHTML='';
+    if(_runMapInstance){ _runMapInstance.remove(); _runMapInstance=null; }
+    _runMapInstance=L.map('run-map',{zoomControl:false,attributionControl:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(_runMapInstance);
+    var latlngs=points.map(function(p){return [p.lat,p.lng];});
+    var line=L.polyline(latlngs,{color:'#8b5fcf',weight:5,opacity:.9}).addTo(_runMapInstance);
+    L.circleMarker(latlngs[0],{radius:7,color:'#34d399',fillColor:'#34d399',fillOpacity:1,weight:2}).addTo(_runMapInstance).bindTooltip('เริ่ม');
+    L.circleMarker(latlngs[latlngs.length-1],{radius:7,color:'#f87171',fillColor:'#f87171',fillOpacity:1,weight:2}).addTo(_runMapInstance).bindTooltip('จบ');
+    _runMapInstance.fitBounds(line.getBounds(),{padding:[24,24]});
+  },150);
+}
+function hideRunMapModal(){
+  document.getElementById('modal-run-map').classList.remove('open');
+}
+function closeRunMapOutside(e){ if(e.target===e.currentTarget) hideRunMapModal(); }
 
 // --- ทำบุญ (ถ่ายรูป + GPS) ---
 function handleMeritPhoto(e){
