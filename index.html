@@ -4964,6 +4964,12 @@ function createMissionClaim(memberId,type,label,amount,weekKey,date){
   m.claims.push({id:uid(),memberId:memberId,type:type,label:label,amount:amount,weekKey:weekKey||null,date:date||null,status:'pending',createdAt:Date.now()});
   saveMissions(m);
 }
+// เช็คว่ารางวัลนี้เคยจ่ายจริงไปแล้วหรือยัง โดยดูจากประวัติธุรกรรม (ไม่เก็บซ้ำในฝั่งภารกิจ เพราะจ่ายแล้วจะลบ claim ทิ้ง)
+function hasPaidMissionReward(memberId,label){
+  return load(KEYS.tx,[]).some(function(t){
+    return t.toId===memberId && t.category==='รางวัลภารกิจ' && t.note && t.note.indexOf(label)>-1;
+  });
+}
 function renderMissions(){
   renderMissionSave();
   renderMissionRun();
@@ -4987,7 +4993,7 @@ function renderMissionSave(){
   var lastWeekStart=new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
   var lastWeekKey=healthLocalDateStr(lastWeekStart);
   var lastSpend=computeWeekSpend(member.id,lastWeekStart);
-  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;});
+  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;})||hasPaidMissionReward(member.id,'ประหยัดสำเร็จ สัปดาห์ '+lastWeekKey);
   if(alreadyClaimed){
     html+='<div class="mission-sub">✓ เคลมรางวัลสัปดาห์ที่แล้วไปแล้ว</div>';
   } else if(budget>0 && lastSpend<budget){
@@ -5004,7 +5010,7 @@ function claimSaveReward(){
   var lastWeekStart=new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
   var lastWeekKey=healthLocalDateStr(lastWeekStart);
   var lastSpend=computeWeekSpend(member.id,lastWeekStart);
-  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;});
+  var alreadyClaimed=m.claims.some(function(c){return c.memberId===member.id&&c.type==='save'&&c.weekKey===lastWeekKey;})||hasPaidMissionReward(member.id,'ประหยัดสำเร็จ สัปดาห์ '+lastWeekKey);
   if(alreadyClaimed){toast('error','เคลมรางวัลสัปดาห์นี้ไปแล้ว');return;}
   if(lastSpend>=m.settings.saveWeeklyBudget){toast('error','สัปดาห์ที่แล้วใช้จ่ายเกินเป้าหมาย');return;}
   createMissionClaim(member.id,'save','ประหยัดสำเร็จ สัปดาห์ '+lastWeekKey,m.settings.saveReward,lastWeekKey,null);
@@ -5013,7 +5019,7 @@ function claimSaveReward(){
 }
 
 // --- วิ่งออกกำลังกาย (GPS) ---
-var missionRun={watching:false,watchId:null,points:[],distanceKm:0,startTime:null,timerInterval:null};
+var missionRun={watching:false,watchId:null,points:[],distanceKm:0,startTime:null,timerInterval:null,steps:0,lastStepMag:9.8,lastStepTime:0,motionHandler:null,smoothedMag:null,stepPhase:'down'};
 function haversineKm(lat1,lng1,lat2,lng2){
   var R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
   var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
@@ -5023,6 +5029,7 @@ function startRunTracking(){
   if(!navigator.geolocation){toast('error','อุปกรณ์นี้ไม่รองรับ GPS');return;}
   if(missionRun.watching) return;
   missionRun.watching=true; missionRun.points=[]; missionRun.distanceKm=0; missionRun.startTime=Date.now();
+  missionRun.steps=0; missionRun.lastStepMag=9.8; missionRun.lastStepTime=0; missionRun.smoothedMag=null; missionRun.stepPhase='down';
   missionRun.watchId=navigator.geolocation.watchPosition(function(pos){
     var acc=pos.coords.accuracy; // ความแม่นยำเป็นเมตร ยิ่งน้อยยิ่งแม่น
     if(typeof acc==='number' && acc>25){ return; } // สัญญาณ GPS แม่นยำไม่พอ (เช่น ในตึก/ใต้ต้นไม้) ข้ามจุดนี้ไปเลย ไม่นับระยะ
@@ -5045,14 +5052,48 @@ function startRunTracking(){
     updateRunLiveDisplay();
   },function(err){ toast('error','ไม่สามารถเข้าถึง GPS ได้: '+err.message); },{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
   missionRun.timerInterval=setInterval(updateRunLiveDisplay,1000);
+  requestMotionPermission().then(function(ok){
+    if(ok && missionRun.watching){
+      missionRun.motionHandler=handleDeviceMotion;
+      window.addEventListener('devicemotion', missionRun.motionHandler);
+    } else if(!ok){
+      toast('info','นับก้าวไม่ได้ (อุปกรณ์ไม่รองรับ หรือไม่ได้อนุญาต Motion Sensor) — ระยะทางยังวัดจาก GPS ตามปกติ');
+    }
+  });
   renderMissionRun();
 }
+function requestMotionPermission(){
+  if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+    return DeviceMotionEvent.requestPermission().then(function(state){ return state==='granted'; }).catch(function(){ return false; });
+  }
+  return Promise.resolve(typeof DeviceMotionEvent!=='undefined');
+}
+function handleDeviceMotion(e){
+  var acc=e.accelerationIncludingGravity;
+  if(!acc || acc.x===null || acc.x===undefined) return;
+  var mag=Math.sqrt(acc.x*acc.x+acc.y*acc.y+acc.z*acc.z);
+  // กรองสัญญาณแบบ low-pass (exponential moving average) ตัดสัญญาณสั่นความถี่สูงที่ไม่ใช่จังหวะก้าวจริงออก
+  var alpha=0.25;
+  missionRun.smoothedMag = (missionRun.smoothedMag===null) ? mag : (alpha*mag + (1-alpha)*missionRun.smoothedMag);
+  var delta=missionRun.smoothedMag-9.8; // หักค่าแรงโน้มถ่วงพื้นฐานออกคร่าวๆ
+  var now=Date.now();
+  var upperTh=1.0, lowerTh=0.3; // ใช้ hysteresis (2 ค่าเกณฑ์) กันนับซ้ำจากสัญญาณสั่นไหวรอบจุดพีคเดียวกัน
+  if(missionRun.stepPhase!=='up' && delta>upperTh && (now-missionRun.lastStepTime)>300){ // ขึ้นถึงจุดพีค + กันนับถี่เกินไป
+    missionRun.steps++;
+    missionRun.lastStepTime=now;
+    missionRun.stepPhase='up';
+    updateRunLiveDisplay();
+  } else if(missionRun.stepPhase==='up' && delta<lowerTh){ // สัญญาณตกกลับลงมาต่ำพอ ถึงจะพร้อมนับก้าวถัดไป
+    missionRun.stepPhase='down';
+  }
+}
 function updateRunLiveDisplay(){
-  var distEl=document.getElementById('mission-run-dist'), timeEl=document.getElementById('mission-run-time');
+  var distEl=document.getElementById('mission-run-dist'), timeEl=document.getElementById('mission-run-time'), stepEl=document.getElementById('mission-run-steps');
   if(!distEl||!timeEl) return;
   distEl.textContent=missionRun.distanceKm.toFixed(2)+' กม.';
   var sec=Math.round((Date.now()-missionRun.startTime)/1000);
   timeEl.textContent=Math.floor(sec/60).toString().padStart(2,'0')+':'+(sec%60).toString().padStart(2,'0');
+  if(stepEl) stepEl.textContent=(missionRun.steps||0)+' ก้าว';
 }
 function checkRunWeeklyStreak(memberId){
   var m=getMissions();
@@ -5062,9 +5103,9 @@ function checkRunWeeklyStreak(memberId){
     var d=new Date(weekStart); d.setDate(d.getDate()+i);
     if(d>today){allValid=false;break;}
     var dStr=healthLocalDateStr(d);
-    if(!m.runSessions.some(function(s){return s.memberId===memberId&&s.date===dStr&&s.valid;})){allValid=false;break;}
+    if(getDayTotalDistance(memberId,dStr) < m.settings.runGoalKm){allValid=false;break;}
   }
-  if(allValid && !m.claims.some(function(c){return c.memberId===memberId&&c.type==='run_streak'&&c.weekKey===weekKey;})){
+  if(allValid && !m.claims.some(function(c){return c.memberId===memberId&&c.type==='run_streak'&&c.weekKey===weekKey;}) && !hasPaidMissionReward(memberId,'วิ่งครบ 7 วันติดต่อกัน สัปดาห์ '+weekKey)){
     createMissionClaim(memberId,'run_streak','วิ่งครบ 7 วันติดต่อกัน สัปดาห์ '+weekKey,m.settings.runWeeklyBonus,weekKey,null);
     toast('success','🔥 วิ่งครบ 7 วันติดกัน! ได้โบนัสพิเศษ');
   }
@@ -5073,31 +5114,40 @@ function stopRunTracking(){
   if(!missionRun.watching) return;
   navigator.geolocation.clearWatch(missionRun.watchId);
   clearInterval(missionRun.timerInterval);
+  if(missionRun.motionHandler){ window.removeEventListener('devicemotion', missionRun.motionHandler); missionRun.motionHandler=null; }
   missionRun.watching=false;
   var durationSec=Math.round((Date.now()-missionRun.startTime)/1000);
   var distanceKm=Math.round(missionRun.distanceKm*100)/100;
   var avgSpeedKmh=durationSec>0?(distanceKm/(durationSec/3600)):0;
+  var steps=missionRun.steps||0;
   var m=getMissions(); var goal=m.settings.runGoalKm;
-  var valid=distanceKm>=goal && avgSpeedKmh>=2 && avgSpeedKmh<=15;
+  var speedOk=avgSpeedKmh>=2 && avgSpeedKmh<=15; // เช็คแค่ว่าเป็นการวิ่ง/เดินจริง (ไม่ใช่นั่งรถ) ไม่บังคับว่ารอบนี้ต้องครบเป้าคนเดียว
   var member=getCurrentMember(); var today=healthLocalDateStr();
   var route=decimateRoute(missionRun.points,150);
-  var session={id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,valid:valid,route:route,createdAt:Date.now()};
+  var session={id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,steps:steps,valid:speedOk,route:route,createdAt:Date.now()};
   m.runSessions.push(session);
   saveMissions(m);
-  if(valid){
-    var hasClaimToday=m.claims.some(function(c){return c.memberId===member.id&&c.type==='run'&&c.date===today;});
+  var todayTotal=getDayTotalDistance(member.id,today);
+  var goalMetToday = speedOk && todayTotal>=goal; // รวมทุกรอบของ "วันนี้" เท่านั้น ข้ามวันแล้วจะเริ่มนับใหม่จาก 0 เสมอ
+  if(!speedOk){
+    toast('error','ความเร็วเฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม. ดูไม่เหมือนวิ่ง/เดิน — รอบนี้ไม่ถูกนับรวม');
+  } else if(goalMetToday){
+    var hasClaimToday=m.claims.some(function(c){return c.memberId===member.id&&c.type==='run'&&c.date===today;})||hasPaidMissionReward(member.id,'วิ่งครบเป้าวันที่ '+today);
     if(!hasClaimToday){
       createMissionClaim(member.id,'run','วิ่งครบเป้าวันที่ '+today,m.settings.runDailyReward,null,today);
       checkRunWeeklyStreak(member.id);
-      toast('success','🏃 วิ่งครบเป้า '+distanceKm.toFixed(2)+' กม.! ส่งคำขอรับรางวัลแล้ว');
+      toast('success','🏃 วันนี้รวมครบเป้า '+todayTotal.toFixed(2)+' กม.! ส่งคำขอรับรางวัลแล้ว');
     } else {
-      toast('info','วันนี้รับรางวัลวิ่งไปแล้ว แต่บันทึกการวิ่งนี้ไว้ให้แล้ว');
+      toast('info','วันนี้รับรางวัลวิ่งไปแล้ว แต่บันทึกการวิ่งรอบนี้ไว้ให้แล้ว');
     }
   } else {
-    toast('error','วิ่งได้ '+distanceKm.toFixed(2)+' กม. (เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.) — ยังไม่ผ่านเกณฑ์');
+    toast('info','วิ่งได้ '+distanceKm.toFixed(2)+' กม. รอบนี้ • วันนี้รวม '+todayTotal.toFixed(2)+'/'+goal+' กม. — วิ่งเพิ่มอีกนิดวันนี้ให้ครบเป้าได้ (แต่ถ้าข้ามวันจะเริ่มนับใหม่)');
   }
   renderMissionRun();
-  showRunRouteModal(route, distanceKm.toFixed(2)+' กม. • '+formatRunDuration(durationSec)+' • เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.'+(valid?' • ✅ ผ่านเกณฑ์':' • ยังไม่ผ่านเกณฑ์'));
+  showRunRouteModal(route, distanceKm.toFixed(2)+' กม. • '+formatRunDuration(durationSec)+' • '+steps+' ก้าว • เฉลี่ย '+avgSpeedKmh.toFixed(1)+' กม./ชม.'+(goalMetToday?' • ✅ ครบเป้าวันนี้':(speedOk?' • วันนี้รวม '+todayTotal.toFixed(2)+'/'+goal+' กม.':' • ไม่นับ (ความเร็วผิดปกติ)')));
+}
+function getDayTotalDistance(memberId,dateStr){
+  return getMissions().runSessions.filter(function(s){return s.memberId===memberId&&s.date===dateStr&&s.valid;}).reduce(function(sum,s){return sum+(s.distanceKm||0);},0);
 }
 function renderMissionRun(){
   var box=document.getElementById('mission-run-body'); if(!box) return;
@@ -5108,30 +5158,48 @@ function renderMissionRun(){
   for(var i=0;i<7;i++){
     var d=new Date(weekStart); d.setDate(d.getDate()+i);
     var dStr=healthLocalDateStr(d);
-    var hasValid=m.runSessions.some(function(s){return s.memberId===member.id&&s.date===dStr&&s.valid;});
+    var hasValid=getDayTotalDistance(member.id,dStr)>=m.settings.runGoalKm;
     dots+='<div class="mission-streak-dot'+(hasValid?' on':'')+'"></div>';
   }
   var html='<div class="mission-sub">เป้าหมาย '+m.settings.runGoalKm+' กม./วัน • รางวัล <span class="mission-reward-tag">+'+m.settings.runDailyReward+' USDC/วัน</span> • ครบ 7 วันติด <span class="mission-reward-tag">+'+m.settings.runWeeklyBonus+' USDC</span></div>';
   html+='<div class="mission-streak-row">'+dots+'</div>';
+  var todayStr=healthLocalDateStr();
+  var todayTotalNow=getDayTotalDistance(member.id,todayStr);
+  html+='<div class="mission-sub">วันนี้วิ่งรวมแล้ว <b style="color:'+(todayTotalNow>=m.settings.runGoalKm?'var(--green)':'var(--fg)')+'">'+todayTotalNow.toFixed(2)+'</b> / '+m.settings.runGoalKm+' กม. (รวมได้หลายรอบ แต่ข้ามวันจะเริ่มนับใหม่)</div>';
   if(missionRun.watching){
-    html+='<div class="mission-run-live"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div></div>';
+    html+='<div class="mission-run-live"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div><div class="lbl" id="mission-run-steps" style="margin-top:6px;font-weight:700;color:var(--fg)">0 ก้าว</div></div>';
     html+='<button class="w-btn" style="background:var(--red)" onclick="stopRunTracking()">⏹ จบการวิ่ง</button>';
   } else {
     html+='<button class="w-btn" onclick="startRunTracking()">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
   }
   var recent=m.runSessions.filter(function(s){return s.memberId===member.id;}).sort(function(a,b){return b.createdAt-a.createdAt;}).slice(0,5);
   if(recent.length){
-    html+='<div style="margin-top:14px;font-size:.68rem;color:var(--fg-m);font-weight:700">ประวัติล่าสุด</div>';
+    html+='<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.68rem;color:var(--fg-m);font-weight:700">ประวัติล่าสุด</span><button type="button" style="background:none;border:none;color:var(--red);font-size:.62rem;cursor:pointer;padding:4px" onclick="resetRunData()">🗑️ รีเซ็ตข้อมูลการวิ่ง</button></div>';
     html+=recent.map(function(s){
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'+
         '<span style="font-size:.68rem;color:var(--fg-m);flex-shrink:0">'+s.date+'</span>'+
-        '<span style="font-size:.72rem;font-weight:700;flex:1">'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+'</span>'+
+        '<span style="font-size:.72rem;font-weight:700;flex:1">'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+(s.steps?(' • '+s.steps+' ก้าว'):'')+'</span>'+
         '<span style="font-size:.62rem">'+(s.valid?'✅':'⚠️')+'</span>'+
-        (s.route&&s.route.length>1?'<button type="button" class="s-btn" style="width:auto;padding:5px 10px;flex:0 0 auto" onclick=\'showRunRouteModal(JSON.parse(this.dataset.route),"'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+'")\' data-route=\''+JSON.stringify(s.route)+'\'>🗺️</button>':'')+
+        (s.route&&s.route.length>1?'<button type="button" class="s-btn" style="width:auto;padding:5px 10px;flex:0 0 auto" onclick=\'showRunRouteModal(JSON.parse(this.dataset.route),"'+s.distanceKm.toFixed(2)+' กม. • '+formatRunDuration(s.durationSec)+(s.steps?(' • '+s.steps+' ก้าว'):'')+'")\' data-route=\''+JSON.stringify(s.route)+'\'>🗺️</button>':'')+
       '</div>';
     }).join('');
   }
   box.innerHTML=html;
+}
+function resetRunData(){
+  var member=getCurrentMember(); if(!member) return;
+  if(!confirm('ยืนยันล้างประวัติการวิ่งทั้งหมดของ '+member.name+' (ระยะทาง, ก้าว, เส้นทาง, สถิติ 7 วันติด) ใช่หรือไม่?\n(รางวัลที่เคยได้รับไปแล้วจะไม่ถูกลบ)')) return;
+  if(missionRun.watching){
+    navigator.geolocation.clearWatch(missionRun.watchId);
+    clearInterval(missionRun.timerInterval);
+    if(missionRun.motionHandler){ window.removeEventListener('devicemotion', missionRun.motionHandler); missionRun.motionHandler=null; }
+    missionRun.watching=false;
+  }
+  var m=getMissions();
+  m.runSessions = m.runSessions.filter(function(s){return s.memberId!==member.id;});
+  saveMissions(m);
+  toast('success','ล้างประวัติการวิ่งแล้ว');
+  renderMissionRun();
 }
 function formatRunDuration(sec){
   var m2=Math.floor(sec/60), s2=sec%60;
@@ -5260,7 +5328,7 @@ function payMissionClaim(claimId){
     return (tx && tx.wait) ? tx.wait() : tx;
   }).then(function(){
     addTransaction(state.currentUserId, member.id, claim.amount, '🪙 รางวัลภารกิจ: '+claim.label, '', 'รางวัลภารกิจ', '');
-    claim.status='paid'; claim.paidAt=Date.now();
+    m.claims = m.claims.filter(function(c){return c.id!==claimId;}); // จ่ายแล้วไม่เก็บซ้ำ ข้อมูลอยู่ในประวัติธุรกรรมแล้ว
     saveMissions(m);
     toast('success','จ่ายรางวัล '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำเร็จ!');
     renderMissionClaims();
