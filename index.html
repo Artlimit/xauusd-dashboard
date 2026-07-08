@@ -5019,12 +5019,13 @@ var DEFAULT_MISSION_SETTINGS = {
 };
 function getMissions(){
   var m=load(KEYS.missions,null);
-  if(!m){ m={settings:Object.assign({},DEFAULT_MISSION_SETTINGS),runSessions:[],meritLogs:[],claims:[]}; save(KEYS.missions,m); }
+  if(!m){ m={settings:Object.assign({},DEFAULT_MISSION_SETTINGS),runSessions:[],meritLogs:[],claims:[],strideLength:{}}; save(KEYS.missions,m); }
   if(!m.settings) m.settings={};
   Object.keys(DEFAULT_MISSION_SETTINGS).forEach(function(k){ if(m.settings[k]===undefined) m.settings[k]=DEFAULT_MISSION_SETTINGS[k]; });
   if(!m.runSessions) m.runSessions=[];
   if(!m.meritLogs) m.meritLogs=[];
   if(!m.claims) m.claims=[];
+  if(!m.strideLength) m.strideLength={};
   return m;
 }
 function saveMissions(m){ save(KEYS.missions,m); }
@@ -5100,21 +5101,98 @@ function claimSaveReward(){
 }
 
 // --- วิ่งออกกำลังกาย (GPS) ---
-var missionRun={watching:false,watchId:null,points:[],distanceKm:0,startTime:null,timerInterval:null,steps:0,lastStepMag:9.8,lastStepTime:0,motionHandler:null,smoothedMag:null,stepPhase:'down'};
+var missionRun={watching:false,watchId:null,points:[],distanceKm:0,startTime:null,timerInterval:null,steps:0,lastStepMag:9.8,lastStepTime:0,motionHandler:null,smoothedMag:null,stepPhase:'down',accSum:0,accCount:0};
 function haversineKm(lat1,lng1,lat2,lng2){
   var R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
   var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
+// คำนวณความชันเฉลี่ย (%) ของเส้นทางจากความสูง GPS (ถ้าอุปกรณ์ไม่รองรับ altitude จะได้ 0 ไม่กระทบการคำนวณ)
+// เกลี่ยค่าความสูงด้วยค่าเฉลี่ยเคลื่อนที่ (moving average) ก่อนคำนวณ ช่วยลดสัญญาณสั่นแบบสุ่มของ GPS altitude
+function smoothAltitudes(points, windowSize){
+  var half=Math.floor(windowSize/2);
+  return points.map(function(p,i){
+    if(typeof p.alt!=='number') return p;
+    var sum=0,count=0;
+    for(var j=Math.max(0,i-half); j<=Math.min(points.length-1,i+half); j++){
+      if(typeof points[j].alt==='number'){ sum+=points[j].alt; count++; }
+    }
+    var copy={}; for(var k in p) copy[k]=p[k];
+    copy.alt = count>0 ? (sum/count) : p.alt;
+    return copy;
+  });
+}
+function computeInclinePercent(points){
+  var smoothed=smoothAltitudes(points,5); // เฉลี่ยจากจุดใกล้เคียง 5 จุด ลด noise ก่อนคำนวณผลต่างความสูง
+  var gainM=0, distM=0;
+  for(var i=1;i<smoothed.length;i++){
+    var a=smoothed[i-1], b=smoothed[i];
+    if(typeof a.alt!=='number' || typeof b.alt!=='number') continue;
+    var segKm=haversineKm(a.lat,a.lng,b.lat,b.lng);
+    var segM=segKm*1000;
+    if(segM<1) continue; // ระยะสั้นเกินไป ค่าความสูงจะสั่นเยอะ ข้ามไปกันคลาดเคลื่อน
+    var dAlt=b.alt-a.alt;
+    if(dAlt>0) gainM+=dAlt; // นับเฉพาะช่วงขึ้นเนิน (ตามที่ต้องการปรับระยะก้าวตอนวิ่งขึ้น)
+    distM+=segM;
+  }
+  if(distM<20) return 0; // ข้อมูลน้อยเกินไปจะเชื่อถือไม่ได้
+  return (gainM/distM)*100;
+}
+// ความยาวก้าวมาตรฐาน (เมตร) ตามจังหวะก้าว (cadence = ก้าว/นาที) — อ้างอิงหลักการเดียวกับที่ Garmin/Fitbit ใช้
+function standardStrideForCadence(cadence){
+  if(cadence<=90) return 0.65;      // เดิน
+  if(cadence<=130) return 0.65+(cadence-90)/(130-90)*(1.00-0.65);   // เดินเร็ว-จ๊อกกิ้ง
+  if(cadence<=170) return 1.00+(cadence-130)/(170-130)*(1.30-1.00); // วิ่งจ๊อกกิ้ง-วิ่งเร็ว
+  return 1.30; // วิ่งเร็วมาก
+}
+// รวม 3 แหล่งข้อมูล (GPS จริง + ความยาวก้าวเฉพาะตัวที่เรียนรู้ไว้ + สูตรมาตรฐานตามจังหวะก้าว) เป็นระยะทางสุดท้าย
+// น้ำหนักของ GPS จะลดลงอัตโนมัติถ้าความแม่นยำแย่ หรือถ้าระยะที่ได้น้อยกว่าที่ก้าวควรจะพาไปมาก (เช่นวิ่งลู่ในฟิตเนสที่ตำแหน่งไม่ขยับ)
+function fuseRunDistance(gpsKm, steps, durationSec, avgAccuracy, personalStrideM, inclinePercent){
+  var cadence = durationSec>0 ? (steps/(durationSec/60)) : 0;
+  var standardStrideM = standardStrideForCadence(cadence);
+  // วิ่งขึ้นเนิน: ก้าวจะสั้นลงและช้าลงจากปกติ ลดความยาวก้าวลงตามความชัน (สูงสุด 35%) ก่อนเอาไปคูณกับจำนวนก้าว
+  var inclineFactor = 1 - Math.min(0.35, Math.max(0, inclinePercent||0)*0.03);
+  standardStrideM *= inclineFactor;
+  var adjPersonalStrideM = personalStrideM ? personalStrideM*inclineFactor : null;
+  var standardKm = steps*standardStrideM/1000;
+  var personalKm = adjPersonalStrideM ? (steps*adjPersonalStrideM/1000) : null;
+  var expectedFromSteps = personalKm!==null ? personalKm : standardKm;
+
+  var gpsWeight;
+  if(gpsKm<0.05 || (expectedFromSteps>0.05 && (gpsKm/expectedFromSteps)<0.3)){
+    gpsWeight=0; // GPS แทบไม่ขยับทั้งที่ก้าวเยอะ = สัญญาณหลุด/วิ่งลู่ ไม่ใช้ระยะจาก GPS เลยรอบนี้
+  } else if(typeof avgAccuracy!=='number'){
+    gpsWeight=0.5; // ไม่มีข้อมูลความแม่นยำ ใช้น้ำหนักกลางๆ
+  } else {
+    var acc=Math.max(3,Math.min(25,avgAccuracy));
+    gpsWeight = 0.75 - (acc-3)/(25-3)*(0.75-0.4); // แม่นยำดี (3ม.) ได้น้ำหนัก .75 แม่นยำแย่ (25ม.) เหลือ .4
+  }
+  var remaining=1-gpsWeight;
+  var personalWeight = personalKm!==null ? remaining*0.7 : 0;
+  var standardWeight = remaining - personalWeight;
+  var finalKm = gpsWeight*gpsKm + personalWeight*(personalKm||0) + standardWeight*standardKm;
+  return {finalKm:finalKm, gpsWeight:gpsWeight, personalWeight:personalWeight, standardWeight:standardWeight, standardKm:standardKm, personalKm:personalKm, cadence:cadence};
+}
+// เรียนรู้ความยาวก้าวเฉพาะตัวจากรอบที่ GPS แม่นยำดี (ไว้ใช้ประมาณระยะตอน GPS ใช้ไม่ได้ เช่น วิ่งลู่)
+function updatePersonalStride(memberId, gpsKm, steps, gpsWeight){
+  if(gpsWeight<0.6 || steps<50 || gpsKm<0.1) return; // ข้อมูลรอบนี้ไม่น่าเชื่อถือพอจะเอามาเรียนรู้
+  var strideM = gpsKm*1000/steps;
+  if(strideM<0.4 || strideM>1.6) return; // ค่าผิดปกติเกินจริง ไม่เอามาเรียนรู้
+  var m=getMissions();
+  var old=m.strideLength[memberId];
+  m.strideLength[memberId] = old ? (old*0.7+strideM*0.3) : strideM; // ค่อยๆ ปรับด้วย EMA ให้เสถียร ไม่แกว่งง่าย
+  saveMissions(m);
+}
 function startRunTracking(){
   if(!navigator.geolocation){toast('error','อุปกรณ์นี้ไม่รองรับ GPS');return;}
   if(missionRun.watching) return;
   missionRun.watching=true; missionRun.points=[]; missionRun.distanceKm=0; missionRun.startTime=Date.now();
-  missionRun.steps=0; missionRun.lastStepMag=9.8; missionRun.lastStepTime=0; missionRun.smoothedMag=null; missionRun.stepPhase='down';
+  missionRun.steps=0; missionRun.lastStepMag=9.8; missionRun.lastStepTime=0; missionRun.smoothedMag=null; missionRun.stepPhase='down'; missionRun.accSum=0; missionRun.accCount=0;
   missionRun.watchId=navigator.geolocation.watchPosition(function(pos){
     var acc=pos.coords.accuracy; // ความแม่นยำเป็นเมตร ยิ่งน้อยยิ่งแม่น
     if(typeof acc==='number' && acc>25){ return; } // สัญญาณ GPS แม่นยำไม่พอ (เช่น ในตึก/ใต้ต้นไม้) ข้ามจุดนี้ไปเลย ไม่นับระยะ
-    var p={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now()};
+    if(typeof acc==='number'){ missionRun.accSum+=acc; missionRun.accCount++; }
+    var p={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now(),alt:(typeof pos.coords.altitude==='number'?pos.coords.altitude:null)};
     if(missionRun.points.length>0){
       var prev=missionRun.points[missionRun.points.length-1];
       var d=haversineKm(prev.lat,prev.lng,p.lat,p.lng);
@@ -5198,14 +5276,20 @@ function stopRunTracking(){
   if(missionRun.motionHandler){ window.removeEventListener('devicemotion', missionRun.motionHandler); missionRun.motionHandler=null; }
   missionRun.watching=false;
   var durationSec=Math.round((Date.now()-missionRun.startTime)/1000);
-  var distanceKm=Math.round(missionRun.distanceKm*100)/100;
-  var avgSpeedKmh=durationSec>0?(distanceKm/(durationSec/3600)):0;
+  var gpsKm=Math.round(missionRun.distanceKm*100)/100;
   var steps=missionRun.steps||0;
+  var avgAccuracy = missionRun.accCount>0 ? (missionRun.accSum/missionRun.accCount) : null;
   var m=getMissions(); var goal=m.settings.runGoalKm;
-  var speedOk=avgSpeedKmh>=2 && avgSpeedKmh<=15; // เช็คแค่ว่าเป็นการวิ่ง/เดินจริง (ไม่ใช่นั่งรถ) ไม่บังคับว่ารอบนี้ต้องครบเป้าคนเดียว
   var member=getCurrentMember(); var today=healthLocalDateStr();
+  var personalStrideM=m.strideLength[member.id]||null;
+  var inclinePercent=computeInclinePercent(missionRun.points);
+  var fusion=fuseRunDistance(gpsKm, steps, durationSec, avgAccuracy, personalStrideM, inclinePercent);
+  var distanceKm=Math.round(fusion.finalKm*100)/100;
+  var avgSpeedKmh=durationSec>0?(distanceKm/(durationSec/3600)):0;
+  var speedOk=avgSpeedKmh>=2 && avgSpeedKmh<=15; // เช็คแค่ว่าเป็นการวิ่ง/เดินจริง (ไม่ใช่นั่งรถ) ไม่บังคับว่ารอบนี้ต้องครบเป้าคนเดียว
+  updatePersonalStride(member.id, gpsKm, steps, fusion.gpsWeight); // เรียนรู้ความยาวก้าวเฉพาะตัวไว้ใช้ครั้งถัดไป (เฉพาะรอบที่ GPS แม่นยำพอ)
   var route=decimateRoute(missionRun.points,150);
-  var session={id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,steps:steps,valid:speedOk,route:route,createdAt:Date.now()};
+  var session={id:uid(),memberId:member.id,date:today,distanceKm:distanceKm,gpsKm:gpsKm,durationSec:durationSec,avgSpeedKmh:Math.round(avgSpeedKmh*10)/10,steps:steps,valid:speedOk,route:route,createdAt:Date.now()};
   m.runSessions.push(session);
   saveMissions(m);
   var todayTotal=getDayTotalDistance(member.id,today);
