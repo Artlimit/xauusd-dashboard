@@ -431,6 +431,7 @@
     .mission-set-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .mission-set-row label{flex:1;font-size:.68rem;color:var(--fg-m)}
     .mission-set-row input{width:90px;flex-shrink:0}
+    .missions-screen{padding-bottom:100px}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
       display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:white;
@@ -1222,6 +1223,19 @@
           <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:6px">รหัสสมาชิก</div>
           <div style="font-family:monospace;font-size:.95rem;font-weight:700;letter-spacing:.02em;color:var(--purple-light);word-break:break-all;line-height:1.5;margin-bottom:10px" id="receive-id"></div>
           <button class="w-btn" id="receive-copy-btn" onclick="copyReceiveAddress()" style="margin:0;padding:8px;font-size:.72rem;background:rgba(139,95,207,.15);color:var(--purple-light)">📋 คัดลอกที่อยู่</button>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;text-align:left">
+          <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:10px;text-align:center">ที่อยู่กระเป๋าเพิ่มเติม (สำรอง/บัญชีอื่น เช่น Binance)</div>
+          <div id="receive-extra-list"></div>
+          <button type="button" class="s-btn" style="margin-top:4px;background:rgba(139,95,207,.15);color:var(--purple-light)" onclick="showAddExtraAddressForm()">+ เพิ่มที่อยู่กระเป๋า</button>
+          <div id="receive-extra-form" style="display:none;margin-top:12px">
+            <input class="s-input" id="extra-addr-label" placeholder="ชื่อกระเป๋า เช่น Binance" style="margin-bottom:8px">
+            <input class="s-input" id="extra-addr-value" placeholder="0x..." style="font-family:monospace;font-size:.78rem;margin-bottom:8px">
+            <div style="display:flex;gap:8px">
+              <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideAddExtraAddressForm()">ยกเลิก</button>
+              <button type="button" class="s-btn" onclick="saveExtraAddress()">บันทึก</button>
+            </div>
+          </div>
         </div>
         <div style="font-size:.75rem;color:var(--fg-m);line-height:1.6">
           <span style="color:var(--purple-light);margin-right:4px">ℹ️</span>
@@ -3311,6 +3325,7 @@ function openReceive(){
   var m=getCurrentMember();if(!m)return;
   var av=document.getElementById('receive-av');av.style.width='100px';av.style.height='100px';av.style.borderRadius='50%';setAvatarEl(av,m);
   document.getElementById('receive-name').textContent=m.name;
+  renderExtraAddresses();
   if(m.walletAddress){
     document.getElementById('receive-id').textContent=m.walletAddress;
     _renderReceiveQR(m.walletAddress);
@@ -3326,6 +3341,72 @@ function openReceive(){
   }
 }
 function closeReceiveOutside(e){if(e.target===e.currentTarget)document.getElementById('modal-receive').classList.remove('open');}
+
+// ============================================================
+// ที่อยู่กระเป๋าเพิ่มเติม (สำรอง/บัญชีอื่น) — ใช้แค่โชว์ให้คัดลอกอ้างอิง ไม่เกี่ยวกับระบบส่ง/รับ/จ่ายรางวัลจริง
+// ============================================================
+function getMemberExtraAddresses(memberId){
+  var m=getMember(memberId);
+  return (m && m.savedAddresses) ? m.savedAddresses : [];
+}
+function saveMemberExtraAddresses(memberId,list){
+  var members=getMembers();
+  var idx=members.findIndex(function(x){return x.id===memberId;});
+  if(idx<0) return;
+  members[idx].savedAddresses=list;
+  save(KEYS.members,members);
+}
+function renderExtraAddresses(){
+  var box=document.getElementById('receive-extra-list'); if(!box) return;
+  var member=getCurrentMember(); if(!member){box.innerHTML='';return;}
+  var list=getMemberExtraAddresses(member.id);
+  if(list.length===0){ box.innerHTML='<div style="font-size:.68rem;color:var(--fg-m);text-align:center;padding:6px 0">ยังไม่มีที่อยู่เพิ่มเติม</div>'; return; }
+  box.innerHTML=list.map(function(a){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:.7rem;font-weight:700;color:var(--fg)">'+a.label+'</div>'+
+        '<div style="font-size:.65rem;color:var(--fg-m);font-family:monospace;word-break:break-all">'+a.address+'</div>'+
+      '</div>'+
+      '<button type="button" class="s-btn" style="width:auto;padding:6px 10px;flex:0 0 auto;font-size:.65rem" onclick="copyExtraAddress(\''+a.address+'\')">📋</button>'+
+      '<button type="button" class="s-btn" style="width:auto;padding:6px 10px;flex:0 0 auto;font-size:.65rem;background:rgba(248,113,113,.15);color:var(--red)" onclick="deleteExtraAddress(\''+a.id+'\')">ลบ</button>'+
+    '</div>';
+  }).join('');
+}
+function showAddExtraAddressForm(){
+  document.getElementById('receive-extra-form').style.display='block';
+  document.getElementById('extra-addr-label').value='';
+  document.getElementById('extra-addr-value').value='';
+}
+function hideAddExtraAddressForm(){
+  document.getElementById('receive-extra-form').style.display='none';
+}
+function saveExtraAddress(){
+  var member=getCurrentMember(); if(!member) return;
+  var label=document.getElementById('extra-addr-label').value.trim();
+  var address=document.getElementById('extra-addr-value').value.trim();
+  if(!label){ toast('error','กรุณาใส่ชื่อกระเป๋า'); return; }
+  if(!/^0x[a-fA-F0-9]{40}$/.test(address)){ toast('error','ที่อยู่กระเป๋าไม่ถูกต้อง (ต้องขึ้นต้นด้วย 0x ตามด้วย 40 ตัวอักษร)'); return; }
+  var list=getMemberExtraAddresses(member.id);
+  list.push({id:uid(),label:label,address:address});
+  saveMemberExtraAddresses(member.id,list);
+  hideAddExtraAddressForm();
+  renderExtraAddresses();
+  toast('success','เพิ่มที่อยู่กระเป๋าแล้ว');
+}
+function deleteExtraAddress(id){
+  var member=getCurrentMember(); if(!member) return;
+  var list=getMemberExtraAddresses(member.id).filter(function(a){return a.id!==id;});
+  saveMemberExtraAddresses(member.id,list);
+  renderExtraAddresses();
+}
+function copyExtraAddress(address){
+  function showCopied(){ toast('success','คัดลอกที่อยู่แล้ว'); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(address).then(showCopied).catch(function(){ _fallbackCopy(address, showCopied); });
+  } else {
+    _fallbackCopy(address, showCopied);
+  }
+}
 
 // ============================================================
 // เปลี่ยน PIN
