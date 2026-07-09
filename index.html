@@ -678,6 +678,7 @@
         <div class="amount"><span class="cur" id="wc-cur">฿</span><span id="balanceDisplay">0.00</span></div>
         <div class="sub" id="wc-thb-equiv" style="display:none"></div>
         <div class="sub" id="wc-invested-net" style="display:none;color:var(--yellow)"></div>
+        <div class="sub" id="wc-grand-total" style="display:none;color:var(--green);font-weight:700;margin-top:2px"></div>
         <div class="sub" id="wc-update-time"></div>
       </div>
       <div class="wc-portfolio" id="wc-portfolio" onclick="openAgent()"></div>
@@ -1443,6 +1444,21 @@
       <div id="coin-pick-custom-wrap" style="display:none;margin-top:12px">
         <input class="w-input" id="coin-pick-custom-input" placeholder="พิมพ์ CoinGecko ID เช่น pepe, near, arbitrum" style="margin-bottom:8px">
         <button type="button" class="w-btn" onclick="confirmCustomCoin()">ยืนยันเหรียญนี้</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ทองคำ — กรอกกำไร/ขาดทุนเอง เพราะไม่มีราคาสดให้ดึงอัตโนมัติ -->
+  <div class="sheet-overlay" id="modal-gold-entry" onclick="closeGoldEntryOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🪙 ทองคำ</div>
+      <p style="font-size:.65rem;color:var(--fg-m);margin-bottom:14px;line-height:1.6">ราคาทองไม่ได้ดึงสดอัตโนมัติเหมือนเหรียญคริปโต — กรอกตัวเลขเองได้ทุกครั้งที่ต้องการอัปเดต</p>
+      <input class="w-input" id="gold-invested" type="number" step="0.01" placeholder="เงินลงทุนทั้งหมด (USDC)" style="margin-bottom:12px">
+      <input class="w-input" id="gold-current-value" type="number" step="0.01" placeholder="มูลค่าปัจจุบัน (USDC)" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px">
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideGoldEntryForm()">ยกเลิก</button>
+        <button type="button" class="w-btn" onclick="submitGoldEntry()">บันทึก</button>
       </div>
     </div>
   </div>
@@ -4121,10 +4137,28 @@ function resumeGPSIfNeeded(){
 // ============================================================
 // เอเจนต์ติดตามราคา (Agent) — โครง UI + การตั้งค่ากลยุทธ์ (ยังไม่ดึงราคาจริง)
 // ============================================================
-var AGENT_COIN_LABELS={bitcoin:'BTC',ethereum:'ETH',binancecoin:'BNB',solana:'SOL',ripple:'XRP',dogecoin:'DOGE',cardano:'ADA',tron:'TRX'};
+var AGENT_COIN_LABELS={bitcoin:'BTC',ethereum:'ETH',binancecoin:'BNB',solana:'SOL',ripple:'XRP',dogecoin:'DOGE',cardano:'ADA',tron:'TRX',gold:'ทองคำ'};
 function agentKey(){ var m=getCurrentMember(); return m?('pp_agent_'+m.id):'pp_agent_none'; }
 function agentBudgetKey(){ var m=getCurrentMember(); return m?('pp_agent_budget_'+m.id):'pp_agent_budget_none'; }
-function getAgentWatches(){ return load(agentKey(),[]); }
+function currentMonthKey(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function getAgentWatches(){
+  var list=load(agentKey(),[]);
+  var changed=false;
+  var mk=currentMonthKey();
+  list.forEach(function(w){
+    if(w.coin==='gold'){
+      if(!w.monthKey){ w.monthKey=mk; changed=true; }
+      else if(w.monthKey!==mk){
+        // ขึ้นเดือนใหม่ — เอามูลค่าปัจจุบันของเดือนที่แล้วมาเป็นทุนตั้งต้นเดือนใหม่ แล้วเริ่มนับกำไรใหม่จาก 0
+        w.allocated = (typeof w.manualValue==='number') ? w.manualValue : (w.allocated||0);
+        w.monthKey = mk;
+        changed=true;
+      }
+    }
+  });
+  if(changed) save(agentKey(),list);
+  return list;
+}
 function saveAgentWatches(list){ save(agentKey(),list); }
 function getAgentBudget(){ return load(agentBudgetKey(),0); }
 function getAgentAllocatedTotal(){ return getAgentWatches().reduce(function(s,w){return s+(w.allocated||0);},0); }
@@ -4138,6 +4172,10 @@ function getMemberPortfolioStats(memberId){
   var invested=0, value=0;
   list.forEach(function(w){
     invested+=w.allocated||0;
+    if(w.coin==='gold'){
+      value += typeof w.manualValue==='number' ? w.manualValue : (w.allocated||0);
+      return;
+    }
     var price=_agentPriceCache[w.coin];
     var hasData = w.basePrice>0 && typeof price==='number';
     var qty = hasData ? (w.allocated/w.basePrice) : 0;
@@ -4151,6 +4189,7 @@ function renderWalletPortfolioBox(){
   var box=document.getElementById('wc-portfolio'); if(!box) return;
   var member=getCurrentMember(); if(!member){ box.innerHTML=''; return; }
   var stats=getMemberPortfolioStats(member.id);
+  renderWalletGrandTotal(member, stats);
   if(stats.invested<=0){
     box.innerHTML='<div class="wc-pf-empty">ยังไม่ได้เริ่มลงทุน · แตะเพื่อเริ่ม 📈</div>';
     return;
@@ -4160,6 +4199,15 @@ function renderWalletPortfolioBox(){
   box.innerHTML=
     '<div class="wc-pf-box"><div class="wc-pf-lbl">เงินลงทุนรวม</div><div class="wc-pf-val">'+stats.invested.toFixed(2)+' USDC</div></div>'+
     '<div class="wc-pf-box"><div class="wc-pf-lbl">กำไร/ขาดทุน</div><div class="wc-pf-val '+cls+'">'+sign+stats.profit.toFixed(2)+' ('+sign+stats.profitPct.toFixed(1)+'%)</div></div>';
+}
+// ยอดรวมทั้งหมด (USDC จริงในกระเป๋า + มูลค่าการลงทุนทั้งหมดตอนนี้ เช่น คริปโต/ทองคำ) — โชว์แยกจากยอด USDC จริงเสมอ กันสับสนตอนโอนเงินจริง
+function renderWalletGrandTotal(member, stats){
+  var el=document.getElementById('wc-grand-total'); if(!el) return;
+  if(!stats || stats.value<=0){ el.style.display='none'; return; }
+  var onchainBalance=getAccount(member.id).balance||0;
+  var grandTotal=onchainBalance+stats.value;
+  el.style.display='block';
+  el.textContent='💰 ยอดรวมทั้งหมด (รวมการลงทุน): '+grandTotal.toFixed(2)+' USDC';
 }
 function updateAgentInvestedNetDisplay(){
   var m=getCurrentMember(); if(!m) return;
@@ -4282,6 +4330,11 @@ function renderCoinPickGrid(){
     card.onclick=function(){ selectCoin(id); };
     grid.appendChild(card);
   });
+  var goldCard=document.createElement('div');
+  goldCard.className='coin-pick-card';
+  goldCard.innerHTML=agentCoinIconHTML('gold',40)+'<div style="font-size:.7rem;font-weight:700">ทองคำ</div>';
+  goldCard.onclick=function(){ document.getElementById('modal-coin-picker').classList.remove('open'); hideAgentAddForm(); showGoldEntryForm(); };
+  grid.appendChild(goldCard);
   var customCard=document.createElement('div');
   customCard.className='coin-pick-card'+(!AGENT_COIN_LABELS[current]?' selected':'');
   customCard.innerHTML='<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--fg-m)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div><div style="font-size:.7rem;font-weight:700">อื่น ๆ</div>';
@@ -4297,6 +4350,37 @@ function confirmCustomCoin(){
   var v=document.getElementById('coin-pick-custom-input').value.trim().toLowerCase();
   if(!v){ toast('error','กรุณาระบุ CoinGecko ID ของเหรียญ'); return; }
   selectCoin(v);
+}
+var _goldEditingId=null;
+function showGoldEntryForm(editId){
+  _goldEditingId = editId || null;
+  var editing = _goldEditingId ? getAgentWatches().find(function(w){return w.id===_goldEditingId;}) : null;
+  document.getElementById('gold-invested').value = editing ? editing.allocated : '';
+  document.getElementById('gold-current-value').value = editing ? editing.manualValue : '';
+  document.getElementById('modal-gold-entry').classList.add('open');
+}
+function hideGoldEntryForm(){
+  document.getElementById('modal-gold-entry').classList.remove('open');
+  _goldEditingId=null;
+}
+function closeGoldEntryOutside(e){ if(e.target===e.currentTarget) hideGoldEntryForm(); }
+function submitGoldEntry(){
+  var invested=parseFloat(document.getElementById('gold-invested').value);
+  var currentValue=parseFloat(document.getElementById('gold-current-value').value);
+  if(!(invested>0)){ toast('error','กรุณาระบุเงินลงทุน'); return; }
+  if(isNaN(currentValue)||currentValue<0){ toast('error','กรุณาระบุมูลค่าปัจจุบัน'); return; }
+  var list=getAgentWatches();
+  if(_goldEditingId){
+    var w=list.find(function(x){return x.id===_goldEditingId;});
+    if(w){ w.allocated=invested; w.manualValue=currentValue; }
+  } else {
+    list.push({id:uid(),coin:'gold',allocated:invested,manualValue:currentValue,condType:'above',condValue:0,tiers:[],isManual:true,monthKey:currentMonthKey(),createdAt:Date.now()});
+  }
+  saveAgentWatches(list);
+  hideGoldEntryForm();
+  renderAgentList();
+  renderAgentPortfolio();
+  toast('success','บันทึกข้อมูลทองคำแล้ว');
 }
 function selectCoin(coinId){
   document.getElementById('agent-coin-value').value=coinId;
@@ -4413,14 +4497,26 @@ function renderAgentList(){
   box.innerHTML='';
   list.forEach(function(w){
     var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
+    var row=document.createElement('div');
+    row.className='agent-watch-row';
+    row.style.flexWrap='wrap';
+    if(w.coin==='gold'){
+      var goldGain = w.allocated>0 ? ((w.manualValue-w.allocated)/w.allocated*100) : 0;
+      var goldGainTxt = ' <span style="color:'+(goldGain>=0?'var(--green)':'var(--red)')+';font-weight:700">'+(goldGain>=0?'+':'')+goldGain.toFixed(1)+'%</span>';
+      row.innerHTML=agentCoinIconHTML(w.coin)+
+        '<div style="flex:1;min-width:0"><div class="agent-w-name">'+label+' · '+(w.allocated||0).toFixed(2)+' USDC'+goldGainTxt+'</div>'+
+        '<div class="agent-w-cond">มูลค่าปัจจุบัน '+(w.manualValue||0).toFixed(2)+' USDC · กรอกข้อมูลเอง</div>'+
+        '</div>'+
+        '<button type="button" class="agent-w-del" style="color:var(--purple-light)" onclick="showGoldEntryForm(\''+w.id+'\')">แก้ไข</button>'+
+        '<button type="button" class="agent-w-del" onclick="deleteAgentWatch(\''+w.id+'\')">ลบ</button>';
+      box.appendChild(row);
+      return;
+    }
     var tierSummary=agentTierSummary(w);
     var priceTxt = (typeof _agentPriceCache[w.coin]==='number') ? ('$'+_agentPriceCache[w.coin].toFixed(4)) : '—';
     var trend=_agentPriceTrend[w.coin];
     var trendArrow = trend==='up' ? ' <span style="color:var(--green)">▲</span>' : (trend==='down' ? ' <span style="color:var(--red)">▼</span>' : '');
     priceTxt += trendArrow;
-    var row=document.createElement('div');
-    row.className='agent-watch-row';
-    row.style.flexWrap='wrap';
     row.innerHTML=agentCoinIconHTML(w.coin)+
       '<div style="flex:1;min-width:0"><div class="agent-w-name">'+label+
         (w.allocated>0?' · '+w.allocated.toFixed(2)+' USDC':'')+
@@ -4475,6 +4571,10 @@ function renderAgentPortfolio(){
     return;
   }
   var rows=list.map(function(w,i){
+    if(w.coin==='gold'){
+      var gValue = typeof w.manualValue==='number' ? w.manualValue : w.allocated;
+      return { w:w, qty:0, value:gValue, hasData:true, color:AGENT_PORT_COLORS[i%AGENT_PORT_COLORS.length] };
+    }
     var price=_agentPriceCache[w.coin];
     var hasData = w.basePrice>0 && typeof price==='number';
     var qty = hasData ? (w.allocated/w.basePrice) : 0;
@@ -4560,6 +4660,9 @@ function fetchCoinPrices(ids){
 function agentCoinIconHTML(coinId, size){
   size = size || 36;
   var label = AGENT_COIN_LABELS[coinId] || coinId.toUpperCase();
+  if(coinId==='gold'){
+    return '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#fde68a,#f59e0b 60%,#d97706);display:flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.55)+'px">🪙</div>';
+  }
   if(_agentCoinImages[coinId]){
     return '<img src="'+_agentCoinImages[coinId]+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.08)" onerror="this.outerHTML=\'<div class=&quot;agent-coin-icon&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+label.slice(0,4)+'</div>\'">';
   }
@@ -4576,7 +4679,7 @@ function fireAgentAlert(coinId, message){
 function checkAgentAlerts(){
   var list=getAgentWatches();
   if(!list.length) return Promise.resolve();
-  var ids=[]; list.forEach(function(w){ if(ids.indexOf(w.coin)<0) ids.push(w.coin); });
+  var ids=[]; list.forEach(function(w){ if(w.coin!=='gold' && ids.indexOf(w.coin)<0) ids.push(w.coin); });
   return fetchCoinPrices(ids).then(function(prices){
     var changed=false;
     list.forEach(function(w){
