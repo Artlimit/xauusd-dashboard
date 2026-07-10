@@ -1448,17 +1448,43 @@
     </div>
   </div>
 
-  <!-- ทองคำ — กรอกกำไร/ขาดทุนเอง เพราะไม่มีราคาสดให้ดึงอัตโนมัติ -->
+  <!-- ทองคำ — กรอกกำไร/ขาดทุนเอง หรือเชื่อมต่อ MT5 แบบสด -->
   <div class="sheet-overlay" id="modal-gold-entry" onclick="closeGoldEntryOutside(event)">
     <div class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-title">🪙 ทองคำ</div>
-      <p style="font-size:.65rem;color:var(--fg-m);margin-bottom:14px;line-height:1.6">ราคาทองไม่ได้ดึงสดอัตโนมัติเหมือนเหรียญคริปโต — กรอกตัวเลขเองได้ทุกครั้งที่ต้องการอัปเดต</p>
-      <input class="w-input" id="gold-invested" type="number" step="0.01" placeholder="เงินลงทุนทั้งหมด (USDC)" style="margin-bottom:12px">
-      <input class="w-input" id="gold-current-value" type="number" step="0.01" placeholder="มูลค่าปัจจุบัน (USDC)" style="margin-bottom:16px">
-      <div style="display:flex;gap:10px">
-        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideGoldEntryForm()">ยกเลิก</button>
-        <button type="button" class="w-btn" onclick="submitGoldEntry()">บันทึก</button>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button type="button" class="s-btn" id="gold-tab-manual" style="flex:1" onclick="switchGoldTab('manual')">กรอกมือ</button>
+        <button type="button" class="s-btn" id="gold-tab-live" style="flex:1" onclick="switchGoldTab('live')">เชื่อมต่อ MT5 (สด)</button>
+      </div>
+
+      <div id="gold-panel-manual">
+        <p style="font-size:.65rem;color:var(--fg-m);margin-bottom:14px;line-height:1.6">ราคาทองไม่ได้ดึงสดอัตโนมัติเหมือนเหรียญคริปโต — กรอกตัวเลขเองได้ทุกครั้งที่ต้องการอัปเดต</p>
+        <input class="w-input" id="gold-invested" type="number" step="0.01" placeholder="เงินลงทุนทั้งหมด (USDC)" style="margin-bottom:12px">
+        <input class="w-input" id="gold-current-value" type="number" step="0.01" placeholder="มูลค่าปัจจุบัน (USDC)" style="margin-bottom:16px">
+        <div style="display:flex;gap:10px">
+          <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideGoldEntryForm()">ยกเลิก</button>
+          <button type="button" class="w-btn" onclick="submitGoldEntry()">บันทึก</button>
+        </div>
+      </div>
+
+      <div id="gold-panel-live" style="display:none">
+        <p style="font-size:.65rem;color:var(--fg-m);margin-bottom:14px;line-height:1.6">ให้สคริปต์ MT5 (MQL5) ส่งยอด balance/profit เข้ามาที่นี่แบบสด ไม่ต้องกรอกเอง — ดาวน์โหลดสคริปต์และดูวิธีตั้งค่าได้ที่ปุ่มด้านล่าง</p>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+          <div style="font-size:.62rem;color:var(--fg-m);margin-bottom:4px">รหัสครอบครัว (Family Code)</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div id="gold-live-famcode" style="font-family:monospace;font-size:.8rem;font-weight:700;color:var(--purple-light);flex:1;word-break:break-all"></div>
+            <button type="button" class="s-btn" style="width:auto;padding:6px 10px;flex:0 0 auto" onclick="copyGoldSetupField('gold-live-famcode')">📋</button>
+          </div>
+          <div style="font-size:.62rem;color:var(--fg-m);margin-bottom:4px">รหัสสมาชิก (Member ID)</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div id="gold-live-memberid" style="font-family:monospace;font-size:.72rem;font-weight:700;color:var(--purple-light);flex:1;word-break:break-all"></div>
+            <button type="button" class="s-btn" style="width:auto;padding:6px 10px;flex:0 0 auto" onclick="copyGoldSetupField('gold-live-memberid')">📋</button>
+          </div>
+        </div>
+        <div id="gold-live-status" style="font-size:.7rem;text-align:center;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);margin-bottom:12px">⚪ ยังไม่ได้เชื่อมต่อ</div>
+        <button type="button" class="w-btn" style="margin-bottom:10px" onclick="startMT5LiveSync()">🔌 เริ่มรับข้อมูลสดจาก MT5</button>
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="hideGoldEntryForm()">ปิด</button>
       </div>
     </div>
   </div>
@@ -2547,6 +2573,7 @@ function startPinCheck(memberId){
       resumeGPSIfNeeded();
       startAgentPolling();
       startHealthReminders();
+      resumeMT5SyncIfNeeded();
       if(connectedWalletAddress) setTimeout(startAutoRefresh,800);
     } else {
       pinError();toast('error','PIN ไม่ถูกต้อง');
@@ -4352,11 +4379,103 @@ function confirmCustomCoin(){
   selectCoin(v);
 }
 var _goldEditingId=null;
+var _mt5Unsub=null;
+function switchGoldTab(tab){
+  var manualPanel=document.getElementById('gold-panel-manual');
+  var livePanel=document.getElementById('gold-panel-live');
+  var tabManual=document.getElementById('gold-tab-manual');
+  var tabLive=document.getElementById('gold-tab-live');
+  if(tab==='live'){
+    manualPanel.style.display='none'; livePanel.style.display='block';
+    tabLive.style.background='linear-gradient(135deg,var(--purple-mid),var(--pink))'; tabLive.style.color='white'; tabLive.style.border='none';
+    tabManual.style.background='var(--bg-card)'; tabManual.style.color='var(--fg-m)'; tabManual.style.border='1px solid var(--border)';
+    var member=getCurrentMember(), fam=getFamily();
+    document.getElementById('gold-live-famcode').textContent = (fam&&fam.code) ? fam.code : '—';
+    document.getElementById('gold-live-memberid').textContent = member ? member.id : '—';
+  } else {
+    livePanel.style.display='none'; manualPanel.style.display='block';
+    tabManual.style.background='linear-gradient(135deg,var(--purple-mid),var(--pink))'; tabManual.style.color='white'; tabManual.style.border='none';
+    tabLive.style.background='var(--bg-card)'; tabLive.style.color='var(--fg-m)'; tabLive.style.border='1px solid var(--border)';
+  }
+}
+function copyGoldSetupField(elId){
+  var text=document.getElementById(elId).textContent;
+  function showCopied(){ toast('success','คัดลอกแล้ว'); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(showCopied).catch(function(){ _fallbackCopy(text, showCopied); });
+  } else {
+    _fallbackCopy(text, showCopied);
+  }
+}
+// เชื่อมฟัง Firestore แบบสด — ให้สคริปต์ MQL5 ฝั่ง MT5 เขียนค่าเข้ามาที่ families/{code}/mt5feeds/{memberId}
+function attachMT5Listener(memberId, famCode, watchId){
+  if(_mt5Unsub){ _mt5Unsub(); _mt5Unsub=null; }
+  initFirebase().then(function(ok){
+    var statusEl=document.getElementById('gold-live-status');
+    if(!ok){ if(statusEl) statusEl.textContent='🔴 เชื่อมต่อ Firebase ไม่ได้'; return; }
+    _mt5Unsub=_fb.db.collection('families').doc(famCode).collection('mt5feeds').doc(memberId)
+      .onSnapshot(function(doc){
+        if(!doc.exists) return;
+        var d=doc.data();
+        var balanceUSDC=(d.balanceCents||0)/100;
+        var profitUSDC=(d.profitCents||0)/100;
+        var investedUSDC=balanceUSDC-profitUSDC;
+        var list=getAgentWatches();
+        var w=list.find(function(x){return x.id===watchId;});
+        if(w){
+          w.allocated = investedUSDC>0 ? investedUSDC : 0.01; // กันหารศูนย์ตอนคิด %
+          w.manualValue = balanceUSDC;
+          saveAgentWatches(list);
+          renderAgentList(); renderAgentPortfolio(); renderWalletPortfolioBox();
+        }
+        var mins=Math.round((Date.now()-(d.updatedAt||0))/60000);
+        var timeTxt = mins<1 ? 'เมื่อสักครู่' : (mins+' นาทีที่แล้ว');
+        var el=document.getElementById('gold-live-status');
+        if(el) el.textContent='🟢 เชื่อมต่อแล้ว • อัปเดตล่าสุด '+timeTxt;
+      }, function(err){
+        console.warn('mt5 listen error',err);
+        var el=document.getElementById('gold-live-status');
+        if(el) el.textContent='🔴 เชื่อมต่อไม่สำเร็จ: '+(err&&err.message?err.message:err);
+      });
+  });
+}
+function startMT5LiveSync(){
+  var member=getCurrentMember(); if(!member) return;
+  var fam=getFamily();
+  if(!fam||!fam.code){ toast('error','ไม่พบรหัสครอบครัว — ตั้งค่าครอบครัวก่อน'); return; }
+  var list=getAgentWatches();
+  var w = _goldEditingId ? list.find(function(x){return x.id===_goldEditingId;}) : null;
+  if(!w){
+    w={id:uid(),coin:'gold',allocated:0.01,manualValue:0,condType:'above',condValue:0,tiers:[],isManual:true,liveSync:true,monthKey:currentMonthKey(),createdAt:Date.now()};
+    list.push(w);
+    _goldEditingId=w.id;
+  } else {
+    w.liveSync=true;
+  }
+  saveAgentWatches(list);
+  document.getElementById('gold-live-status').textContent='🟡 กำลังเชื่อมต่อ...';
+  attachMT5Listener(member.id, fam.code, w.id);
+  renderAgentList(); renderAgentPortfolio();
+}
+// เรียกตอนเข้าแอป/ล็อกอิน — ถ้าเคยเชื่อมต่อ MT5 สดไว้แล้ว ให้กลับมาฟังต่ออัตโนมัติโดยไม่ต้องเปิดฟอร์มใหม่
+function resumeMT5SyncIfNeeded(){
+  var member=getCurrentMember(); if(!member) return;
+  var fam=getFamily(); if(!fam||!fam.code) return;
+  var list=getAgentWatches();
+  var w=list.find(function(x){return x.coin==='gold' && x.liveSync;});
+  if(w) attachMT5Listener(member.id, fam.code, w.id);
+}
 function showGoldEntryForm(editId){
   _goldEditingId = editId || null;
   var editing = _goldEditingId ? getAgentWatches().find(function(w){return w.id===_goldEditingId;}) : null;
   document.getElementById('gold-invested').value = editing ? editing.allocated : '';
   document.getElementById('gold-current-value').value = editing ? editing.manualValue : '';
+  if(editing && editing.liveSync){
+    switchGoldTab('live');
+    document.getElementById('gold-live-status').textContent='🟢 เชื่อมต่ออยู่ • รอข้อมูลอัปเดตถัดไป';
+  } else {
+    switchGoldTab('manual');
+  }
   document.getElementById('modal-gold-entry').classList.add('open');
 }
 function hideGoldEntryForm(){
@@ -5657,6 +5776,7 @@ function init(){
       resumeGPSIfNeeded();
       startAgentPolling();
       startHealthReminders();
+      resumeMT5SyncIfNeeded();
     } else {
       showLogin();
     }
