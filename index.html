@@ -9,6 +9,8 @@
   <!-- Leaflet (ใช้แสดงแผนที่เส้นทางการวิ่งในภารกิจสุขภาพ) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <!-- Chart.js (ใช้แสดงกราฟกำไร/ขาดทุนรายสินทรัพย์) -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
   <!-- Firebase (ใช้สำหรับซิงค์รหัสครอบครัว + ตำแหน่ง GPS ข้ามเครื่อง) -->
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -682,7 +684,7 @@
         <div class="sub" id="wc-thb-equiv" style="display:none"></div>
         <div class="sub" id="wc-update-time" style="margin-top:6px"></div>
       </div>
-      <div class="wc-portfolio" id="wc-portfolio" onclick="openAgent()"></div>
+      <div class="wc-portfolio" id="wc-portfolio" onclick="openPLStats()"></div>
     </div>
     <div class="quick-menu">
       <div class="qi" onclick="openTransfer()"><div class="qi-icon q1"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><span class="qi-label">ส่งเงิน</span></div>
@@ -1390,6 +1392,18 @@
         </div>
         <div id="agent-portfolio-list"></div>
         <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentPortfolio()">‹ กลับ</button>
+      </div>
+
+      <div id="agent-plstats-view" style="display:none">
+        <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">📊 สถิติกำไร/ขาดทุนรายสินทรัพย์</div>
+        <p style="font-size:.62rem;color:var(--fg-m);line-height:1.5;margin-bottom:12px">
+          เทียบกำไร/ขาดทุนของแต่ละสินทรัพย์ที่ลงทุนไว้ (คริปโต, ทองคำ ฯลฯ) รวมทุกประเภทไว้ในที่เดียว รองรับสินทรัพย์ใหม่ที่จะเพิ่มในอนาคตอัตโนมัติ
+        </p>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px">
+          <canvas id="plstats-canvas" height="200"></canvas>
+        </div>
+        <div id="plstats-list"></div>
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hidePLStats()">‹ กลับ</button>
       </div>
 
       <div id="agent-add-view" style="display:none">
@@ -4173,24 +4187,7 @@ var AGENT_COIN_LABELS={bitcoin:'BTC',ethereum:'ETH',binancecoin:'BNB',solana:'SO
 function agentKey(){ var m=getCurrentMember(); return m?('pp_agent_'+m.id):'pp_agent_none'; }
 function agentBudgetKey(){ var m=getCurrentMember(); return m?('pp_agent_budget_'+m.id):'pp_agent_budget_none'; }
 function currentMonthKey(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
-function getAgentWatches(){
-  var list=load(agentKey(),[]);
-  var changed=false;
-  var mk=currentMonthKey();
-  list.forEach(function(w){
-    if(w.coin==='gold'){
-      if(!w.monthKey){ w.monthKey=mk; changed=true; }
-      else if(w.monthKey!==mk){
-        // ขึ้นเดือนใหม่ — เอามูลค่าปัจจุบันของเดือนที่แล้วมาเป็นทุนตั้งต้นเดือนใหม่ แล้วเริ่มนับกำไรใหม่จาก 0
-        w.allocated = (typeof w.manualValue==='number') ? w.manualValue : (w.allocated||0);
-        w.monthKey = mk;
-        changed=true;
-      }
-    }
-  });
-  if(changed) save(agentKey(),list);
-  return list;
-}
+function getAgentWatches(){ return load(agentKey(),[]); }
 function saveAgentWatches(list){ save(agentKey(),list); }
 function getAgentBudget(){ return load(agentBudgetKey(),0); }
 function getAgentAllocatedTotal(){ return getAgentWatches().reduce(function(s,w){return s+(w.allocated||0);},0); }
@@ -4404,13 +4401,19 @@ function attachMT5Listener(memberId, famCode, watchId){
       .onSnapshot(function(doc){
         if(!doc.exists) return;
         var d=doc.data();
-        var balanceUSDC=(d.balanceCents||0)/100;   // ยอดบาลานซ์ปัจจุบัน (สด) — โชว์ตรงเป็น "ทุน"
-        var monthProfitUSDC=(d.profitCents||0)/100; // กำไร/ขาดทุนสะสมตั้งแต่วันที่ 1 ของเดือนถึงตอนนี้ (คำนวณจากฝั่ง MT5)
+        var balanceUSDC=(d.balanceCents||0)/100; // ยอดบาลานซ์ปัจจุบัน (สด) จาก MT5
         var list=getAgentWatches();
         var w=list.find(function(x){return x.id===watchId;});
         if(w){
-          w.allocated = balanceUSDC>0 ? balanceUSDC : 0.01; // กันหารศูนย์ตอนคิด %
-          w.manualValue = balanceUSDC+monthProfitUSDC;
+          var mk=currentMonthKey();
+          if(!w.monthKey || w.monthKey!==mk){
+            // เดือนใหม่ (หรือครั้งแรกที่เชื่อมต่อ) — สแนปช็อตยอดวันที่ 1 ไว้เป็นทุนตั้งต้น แล้ววนแบบนี้ทุกเดือน
+            w.monthStartBalance = balanceUSDC;
+            w.monthKey = mk;
+          }
+          var baseline = (typeof w.monthStartBalance==='number') ? w.monthStartBalance : balanceUSDC;
+          w.allocated = baseline>0 ? baseline : 0.01; // กันหารศูนย์ตอนคิด % — "ทุน" = ยอดวันที่ 1 ของเดือน
+          w.manualValue = balanceUSDC; // "มูลค่าปัจจุบัน" = ยอดสดตอนนี้ → กำไร = ยอดสด - ยอดวันที่ 1 พอดี ไม่นับซ้ำ
           saveAgentWatches(list);
           renderAgentList(); renderAgentPortfolio(); renderWalletPortfolioBox();
         }
@@ -4690,6 +4693,83 @@ function renderAgentPortfolio(){
       (r.hasData?'':'<div style="font-size:.6rem;color:var(--fg-m);margin-top:2px">รอราคาล่าสุด...</div>');
     box.appendChild(row);
   });
+}
+function openPLStats(){
+  document.getElementById('agent-list-view').style.display='none';
+  document.getElementById('agent-add-view').style.display='none';
+  document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-portfolio-view').style.display='none';
+  document.getElementById('agent-budget-edit').style.display='none';
+  document.getElementById('agent-plstats-view').style.display='block';
+  document.getElementById('modal-agent').classList.add('open');
+  startAgentPolling();
+  renderPLStats();
+}
+function hidePLStats(){
+  document.getElementById('agent-plstats-view').style.display='none';
+  document.getElementById('modal-agent').classList.remove('open');
+}
+var _plStatsChart=null;
+function renderPLStats(){
+  var list=getAgentWatches().filter(function(w){return (w.allocated||0)>0;});
+  var listBox=document.getElementById('plstats-list');
+  var canvas=document.getElementById('plstats-canvas');
+  if(list.length===0){
+    if(listBox) listBox.innerHTML='<div class="agent-empty">ยังไม่มีสินทรัพย์ที่ลงทุนไว้<br>ไปเพิ่มเหรียญ/ทองคำก่อนครับ</div>';
+    if(_plStatsChart){ _plStatsChart.destroy(); _plStatsChart=null; }
+    return;
+  }
+  var rows=list.map(function(w){
+    var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
+    var value, hasData;
+    if(w.coin==='gold'){
+      value = typeof w.manualValue==='number' ? w.manualValue : w.allocated;
+      hasData=true;
+    } else {
+      var price=_agentPriceCache[w.coin];
+      hasData = w.basePrice>0 && typeof price==='number';
+      var qty = hasData ? (w.allocated/w.basePrice) : 0;
+      value = hasData ? (qty*price) : w.allocated;
+    }
+    var profit=value-w.allocated;
+    var profitPct = w.allocated>0 ? (profit/w.allocated*100) : 0;
+    return {label:label, coin:w.coin, invested:w.allocated, value:value, profit:profit, profitPct:profitPct, hasData:hasData};
+  });
+
+  if(typeof Chart!=='undefined' && canvas){
+    var ctx=canvas.getContext('2d');
+    var labels=rows.map(function(r){return r.label;});
+    var data=rows.map(function(r){return Math.round(r.profit*100)/100;});
+    var colors=rows.map(function(r){return r.profit>=0?'#34d399':'#f87171';});
+    if(_plStatsChart){ _plStatsChart.destroy(); }
+    _plStatsChart=new Chart(ctx,{
+      type:'bar',
+      data:{ labels:labels, datasets:[{ label:'กำไร/ขาดทุน (USDC)', data:data, backgroundColor:colors, borderRadius:6 }] },
+      options:{
+        responsive:true,
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} },
+          y:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} }
+        }
+      }
+    });
+  } else if(canvas){
+    canvas.parentElement.innerHTML='<div style="text-align:center;padding:20px;color:var(--fg-m);font-size:.7rem">โหลดกราฟไม่ได้ — ต้องเชื่อมต่ออินเทอร์เน็ต</div>';
+  }
+
+  if(listBox){
+    listBox.innerHTML=rows.map(function(r){
+      var sign=r.profit>=0?'+':'';
+      return '<div class="agent-port-row">'+
+        '<div class="agent-port-top">'+
+          '<span style="display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700">'+agentCoinIconHTML(r.coin,20)+r.label+'</span>'+
+          '<span style="font-size:.78rem;font-weight:700;color:'+(r.profit>=0?'var(--green)':'var(--red)')+'">'+sign+r.profit.toFixed(2)+' USDC ('+sign+r.profitPct.toFixed(1)+'%)</span>'+
+        '</div>'+
+        (r.hasData?'':'<div style="font-size:.6rem;color:var(--fg-m);margin-top:2px">รอราคาล่าสุด...</div>')+
+      '</div>';
+    }).join('');
+  }
 }
 function clearAgentHistory(){
   save(agentHistoryKey(),[]);
