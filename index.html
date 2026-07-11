@@ -1918,6 +1918,11 @@ function linkWalletToSession() {
     setTimeout(startAutoRefresh, 800);
   } else if (members.length === 0) {
     // ยังไม่มีครอบครัวเลย และ user กด connect จาก welcome screen
+    // กันเคสสร้างครอบครัวซ้ำโดยไม่ตั้งใจ (เช่น เคยมีรหัสครอบครัวอยู่แล้วแต่ storage เพิ่งถูกล้าง) — ถามยืนยันก่อนเสมอ
+    if (!confirm('คุณมีรหัสครอบครัว (Family Code) อยู่แล้วจากก่อนหน้านี้หรือไม่?\n\nกด "ตกลง" ถ้ายังไม่มี จะสร้างครอบครัวใหม่ให้\nกด "ยกเลิก" ถ้ามีรหัสอยู่แล้ว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)')) {
+      openJoinFamily();
+      return;
+    }
     var fName = (document.getElementById('w-family') && document.getElementById('w-family').value.trim()) || 'ครอบครัวของฉัน';
     var mName = (document.getElementById('w-name') && document.getElementById('w-name').value.trim()) || 'เจ้าของกระเป๋า';
     var memberId = uid();
@@ -2355,6 +2360,11 @@ function createFamily() {
   if(!fName){toast('error','กรุณาใส่ชื่อครอบครัว');return;}
   if(!mName){toast('error','กรุณาใส่ชื่อของคุณ');return;}
   if(!/^\d{4}$/.test(mPin)){toast('error','PIN ต้องเป็นตัวเลข 4 หลัก');return;}
+  // กันสร้างครอบครัวซ้ำซ้อนโดยไม่ตั้งใจ (เช่น เคยมีรหัสครอบครัวอยู่แล้วแต่ storage เพิ่งถูกล้าง) — ถามยืนยันก่อนเสมอ
+  if (!confirm('คุณมีรหัสครอบครัว (Family Code) อยู่แล้วจากก่อนหน้านี้หรือไม่?\n\nกด "ตกลง" ถ้ายังไม่มี จะสร้างครอบครัวใหม่ให้\nกด "ยกเลิก" ถ้ามีรหัสอยู่แล้ว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)')) {
+    openJoinFamily();
+    return;
+  }
   var memberId=uid();
   var famCode=genFamilyCode();
   save(KEYS.family,{name:fName,created:Date.now(),code:famCode});
