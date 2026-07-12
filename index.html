@@ -206,8 +206,8 @@
     .wallet-card::after{content:'';position:absolute;bottom:-40%;left:-10%;width:160px;height:160px;background:rgba(255,255,255,.05);border-radius:50%;z-index:0}
     .wc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;position:relative;z-index:1}
     .wc-label{font-size:.72rem;color:rgba(255,255,255,.7);font-weight:500}
-    .wc-level{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.15);
-      backdrop-filter:blur(4px);padding:4px 12px;border-radius:999px;font-size:.68rem;font-weight:600;color:var(--yellow)}
+    .wc-level{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);
+      padding:4px 12px;border-radius:999px;font-size:.68rem;font-weight:600;color:var(--yellow)}
     .wc-balance{position:relative;z-index:1;margin-bottom:16px}
     .wc-balance .amount{font-family:'Nunito',sans-serif;font-size:2.6rem;font-weight:900;color:white;
       line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.2)}
@@ -219,7 +219,7 @@
       justify-content:center;gap:6px;transition:all .25s}
     .wc-btn.pri{background:white;color:var(--purple-main)}
     .wc-btn.pri:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.15)}
-    .wc-btn.sec{background:rgba(255,255,255,.15);color:white;backdrop-filter:blur(4px)}
+    .wc-btn.sec{background:rgba(255,255,255,.2);color:white}
     .wc-btn.sec:hover{background:rgba(255,255,255,.25)}
     .wc-refresh-icon{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.15);
       border:none;color:white;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
@@ -272,7 +272,7 @@
 
     .history-screen{padding:0 0 calc(90px + env(safe-area-inset-bottom))}
     .page-hdr{display:flex;align-items:center;gap:14px;padding:16px 20px;position:sticky;top:0;
-      background:rgba(26,15,46,.92);backdrop-filter:blur(8px);z-index:10}
+      background:rgba(20,12,36,.97);z-index:10}
     .page-back{width:38px;height:38px;background:var(--bg-card);border:1px solid var(--border);
       border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--fg-m);
       font-size:.9rem;cursor:pointer;transition:all .2s;flex-shrink:0}
@@ -322,7 +322,7 @@
     .pf-item.danger span{color:var(--red)}
 
     .bot-nav{position:absolute;bottom:0;left:0;right:0;z-index:50;
-      background:rgba(26,15,46,.92);backdrop-filter:blur(10px);border-top:1px solid var(--border);
+      background:rgba(20,12,36,.97);border-top:1px solid var(--border);
       display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom))}
     @media(min-width:500px){.bot-nav{border-radius:0 0 33px 33px}}
     .bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;
@@ -445,7 +445,7 @@
     @keyframes scanline{0%{top:15%}50%{top:85%}100%{top:15%}}
     @keyframes camPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.75}}
 
-    .modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);
+    .modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.8);
       z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;
       pointer-events:none;transition:opacity .3s}
     .modal-overlay.open{opacity:1;pointer-events:all}
@@ -468,7 +468,7 @@
     .pin-key.empty{visibility:hidden}
     .pin-key.del{font-size:1.1rem}
 
-    .sheet-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(5px);
+    .sheet-overlay{position:absolute;inset:0;background:rgba(0,0,0,.75);
       z-index:100;display:flex;align-items:flex-end;justify-content:center;opacity:0;
       pointer-events:none;transition:opacity .3s}
     .sheet-overlay.open{opacity:1;pointer-events:all}
@@ -525,7 +525,7 @@
 
     .toast-c{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:200;
       display:flex;flex-direction:column;gap:8px;width:calc(100% - 40px);max-width:380px;pointer-events:none}
-    .toast{background:rgba(42,26,69,.95);backdrop-filter:blur(8px);border:1px solid var(--border);
+    .toast{background:rgba(42,26,69,.97);border:1px solid var(--border);
       border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:.8rem;
       font-weight:500;transform:translateY(-20px);opacity:0;transition:all .35s cubic-bezier(.16,1,.3,1);
       box-shadow:0 8px 32px rgba(0,0,0,.4);pointer-events:auto}
@@ -4383,6 +4383,9 @@ function copyGoldSetupField(elId){
   }
 }
 // เชื่อมฟัง Firestore แบบสด — ให้สคริปต์ MQL5 ฝั่ง MT5 เขียนค่าเข้ามาที่ families/{code}/mt5feeds/{memberId}
+function goldBaselineKey(memberId){ return 'pp_gold_baseline_'+memberId; }
+function getGoldBaseline(memberId){ return load(goldBaselineKey(memberId), null); }
+function saveGoldBaseline(memberId, obj){ save(goldBaselineKey(memberId), obj); }
 function attachMT5Listener(memberId, famCode, watchId){
   if(_mt5Unsub){ _mt5Unsub(); _mt5Unsub=null; }
   initFirebase().then(function(ok){
@@ -4397,16 +4400,25 @@ function attachMT5Listener(memberId, famCode, watchId){
         var w=list.find(function(x){return x.id===watchId;});
         if(w){
           var mk=currentMonthKey();
-          if(!w.monthKey || w.monthKey!==mk || typeof w.monthStartBalance!=='number'){
-            // เดือนใหม่ (หรือครั้งแรกที่เชื่อมต่อ) — สแนปช็อตยอดวันที่ 1 ไว้เป็นทุนตั้งต้น แล้ววนแบบนี้ทุกเดือน
-            w.monthStartBalance = balanceUSDC;
-            w.monthKey = mk;
+          var baselineRec=getGoldBaseline(memberId);
+          if(!baselineRec || baselineRec.monthKey!==mk){
+            // เดือนใหม่ (หรือครั้งแรกสุดที่เชื่อมต่อ) — สแนปช็อตยอดวันที่ 1 ไว้เป็นทุนตั้งต้น
+            // เก็บแยกไว้ต่างหาก ผูกกับสมาชิก+เดือน ไม่ผูกกับตัวรายการทองคำ ต่อให้ลบรายการแล้วสร้างใหม่ค่านี้จะไม่หาย
+            baselineRec={monthKey:mk, balance:balanceUSDC};
+            saveGoldBaseline(memberId, baselineRec);
           }
-          var baseline = (typeof w.monthStartBalance==='number') ? w.monthStartBalance : balanceUSDC;
-          w.allocated = baseline>0 ? baseline : 0.01; // กันหารศูนย์ตอนคิด % — "ทุน" = ยอดวันที่ 1 ของเดือน
+          w.allocated = baselineRec.balance>0 ? baselineRec.balance : 0.01; // กันหารศูนย์ตอนคิด % — "ทุน" = ยอดวันที่ 1 ของเดือน
           w.manualValue = balanceUSDC; // "มูลค่าปัจจุบัน" = ยอดสดตอนนี้ → กำไร = ยอดสด - ยอดวันที่ 1 พอดี ไม่นับซ้ำ
           saveAgentWatches(list);
-          renderAgentList(); renderAgentPortfolio(); renderWalletPortfolioBox();
+          renderWalletPortfolioBox(); // อันนี้เบา ไม่มีกราฟ อัปเดตได้เสมอ
+          var modalOpen=document.getElementById('modal-agent').classList.contains('open');
+          if(modalOpen){
+            // renderAgentList/renderAgentPortfolio (มีวาดกราฟ Chart.js) อัปเดตเฉพาะตอนหน้านั้นเปิดอยู่จริง กันวาดกราฟซ้ำๆ ทุก 5 วิเปล่าๆ ตอนไม่ได้เปิดดู (สาเหตุที่แอปกระตุก)
+            var listShown=document.getElementById('agent-list-view').style.display!=='none';
+            var portShown=document.getElementById('agent-portfolio-view').style.display!=='none';
+            if(listShown) renderAgentList();
+            if(portShown) renderAgentPortfolio();
+          }
         }
         var mins=Math.round((Date.now()-(d.updatedAt||0))/60000);
         var timeTxt = mins<1 ? 'เมื่อสักครู่' : (mins+' นาทีที่แล้ว');
