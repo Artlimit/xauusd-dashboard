@@ -684,7 +684,7 @@
         <div class="sub" id="wc-thb-equiv" style="display:none"></div>
         <div class="sub" id="wc-update-time" style="margin-top:6px"></div>
       </div>
-      <div class="wc-portfolio" id="wc-portfolio" onclick="openAgentPortfolioDirect()"></div>
+      <div class="wc-portfolio" id="wc-portfolio"></div>
     </div>
     <div class="quick-menu">
       <div class="qi" onclick="openTransfer()"><div class="qi-icon q1"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><span class="qi-label">ส่งเงิน</span></div>
@@ -4211,14 +4211,14 @@ function renderWalletPortfolioBox(){
   var stats=getMemberPortfolioStats(member.id);
   renderWalletGrandTotal(member, stats);
   if(stats.invested<=0){
-    box.innerHTML='<div class="wc-pf-empty">ยังไม่ได้เริ่มลงทุน · แตะเพื่อเริ่ม 📈</div>';
+    box.innerHTML='<div class="wc-pf-empty" onclick="openAgent()">ยังไม่ได้เริ่มลงทุน · แตะเพื่อเริ่ม 📈</div>';
     return;
   }
   var cls=stats.profit>=0?'pos':'neg';
   var sign=stats.profit>=0?'+':'';
   box.innerHTML=
-    '<div class="wc-pf-box"><div class="wc-pf-lbl">เงินลงทุนรวม</div><div class="wc-pf-val">'+stats.invested.toFixed(2)+' USDC</div></div>'+
-    '<div class="wc-pf-box"><div class="wc-pf-lbl">กำไร/ขาดทุน</div><div class="wc-pf-val '+cls+'">'+sign+stats.profit.toFixed(2)+' ('+sign+stats.profitPct.toFixed(1)+'%)</div></div>';
+    '<div class="wc-pf-box" onclick="openAgent()"><div class="wc-pf-lbl">เงินลงทุนรวม</div><div class="wc-pf-val">'+stats.invested.toFixed(2)+' USDC</div></div>'+
+    '<div class="wc-pf-box" onclick="openAgentPortfolioDirect()"><div class="wc-pf-lbl">กำไร/ขาดทุน</div><div class="wc-pf-val '+cls+'">'+sign+stats.profit.toFixed(2)+' ('+sign+stats.profitPct.toFixed(1)+'%)</div></div>';
 }
 // ยอดรวมทั้งหมด (USDC จริงในกระเป๋า + มูลค่าการลงทุนทั้งหมดตอนนี้ เช่น คริปโต/ทองคำ) — โชว์แยกจากยอด USDC จริงเสมอ กันสับสนตอนโอนเงินจริง
 function renderWalletGrandTotal(member, stats){
