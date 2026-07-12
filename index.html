@@ -684,7 +684,7 @@
         <div class="sub" id="wc-thb-equiv" style="display:none"></div>
         <div class="sub" id="wc-update-time" style="margin-top:6px"></div>
       </div>
-      <div class="wc-portfolio" id="wc-portfolio" onclick="openPLStats()"></div>
+      <div class="wc-portfolio" id="wc-portfolio" onclick="openAgentPortfolioDirect()"></div>
     </div>
     <div class="quick-menu">
       <div class="qi" onclick="openTransfer()"><div class="qi-icon q1"><svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><span class="qi-label">ส่งเงิน</span></div>
@@ -1390,20 +1390,11 @@
           <div style="font-size:.65rem;color:var(--fg-m)">มูลค่าพอร์ตรวมตอนนี้ (โดยประมาณ)</div>
           <div style="font-size:1.2rem;font-weight:800" id="agent-portfolio-total">0.00 USDC</div>
         </div>
-        <div id="agent-portfolio-list"></div>
-        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentPortfolio()">‹ กลับ</button>
-      </div>
-
-      <div id="agent-plstats-view" style="display:none">
-        <div style="font-size:.85rem;font-weight:800;margin-bottom:10px">📊 สถิติกำไร/ขาดทุนรายสินทรัพย์</div>
-        <p style="font-size:.62rem;color:var(--fg-m);line-height:1.5;margin-bottom:12px">
-          เทียบกำไร/ขาดทุนของแต่ละสินทรัพย์ที่ลงทุนไว้ (คริปโต, ทองคำ ฯลฯ) รวมทุกประเภทไว้ในที่เดียว รองรับสินทรัพย์ใหม่ที่จะเพิ่มในอนาคตอัตโนมัติ
-        </p>
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px" id="agent-portfolio-chart-wrap">
           <canvas id="plstats-canvas" height="200"></canvas>
         </div>
-        <div id="plstats-list"></div>
-        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hidePLStats()">‹ กลับ</button>
+        <div id="agent-portfolio-list"></div>
+        <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentPortfolio()">‹ กลับ</button>
       </div>
 
       <div id="agent-add-view" style="display:none">
@@ -4406,7 +4397,7 @@ function attachMT5Listener(memberId, famCode, watchId){
         var w=list.find(function(x){return x.id===watchId;});
         if(w){
           var mk=currentMonthKey();
-          if(!w.monthKey || w.monthKey!==mk){
+          if(!w.monthKey || w.monthKey!==mk || typeof w.monthStartBalance!=='number'){
             // เดือนใหม่ (หรือครั้งแรกที่เชื่อมต่อ) — สแนปช็อตยอดวันที่ 1 ไว้เป็นทุนตั้งต้น แล้ววนแบบนี้ทุกเดือน
             w.monthStartBalance = balanceUSDC;
             w.monthKey = mk;
@@ -4648,16 +4639,31 @@ function showAgentPortfolio(){
   renderAgentPortfolio(); // แสดงด้วยราคาที่มีอยู่ก่อน (เผื่อยังไม่เคยเช็ค)
   checkAgentAlerts().then(renderAgentPortfolio); // แล้วรีเฟรชอีกทีด้วยราคาล่าสุด
 }
+// เข้าหน้า "สรุปพอร์ตการถือครอง" ตรงๆ จากภายนอก (เช่น กดกล่องกำไร/ขาดทุนที่การ์ดยอดเงินหน้าแรก) โดยไม่ต้องผ่านหน้ารายการเฝ้าราคาก่อน
+function openAgentPortfolioDirect(){
+  document.getElementById('agent-add-view').style.display='none';
+  document.getElementById('agent-history-view').style.display='none';
+  document.getElementById('agent-budget-edit').style.display='none';
+  document.getElementById('agent-list-view').style.display='none';
+  document.getElementById('agent-portfolio-view').style.display='block';
+  document.getElementById('modal-agent').classList.add('open');
+  startAgentPolling();
+  renderAgentPortfolio();
+  checkAgentAlerts().then(renderAgentPortfolio);
+}
 function hideAgentPortfolio(){
   document.getElementById('agent-portfolio-view').style.display='none';
   document.getElementById('agent-list-view').style.display='block';
 }
+var _agentPortChart=null;
 function renderAgentPortfolio(){
   var list=getAgentWatches().filter(function(w){return (w.allocated||0)>0;});
   var box=document.getElementById('agent-portfolio-list');
+  var canvas=document.getElementById('plstats-canvas');
   if(list.length===0){
     box.innerHTML='<div class="agent-empty">ยังไม่มีเหรียญที่จัดสรรเงินลงทุนไว้<br>ไปตั้งค่าที่หน้ารายการเฝ้าราคาก่อนครับ</div>';
     document.getElementById('agent-portfolio-total').textContent='0.00 USDC';
+    if(_agentPortChart){ _agentPortChart.destroy(); _agentPortChart=null; }
     return;
   }
   var rows=list.map(function(w,i){
@@ -4673,6 +4679,28 @@ function renderAgentPortfolio(){
   });
   var total=rows.reduce(function(s,r){return s+r.value;},0) || 1;
   document.getElementById('agent-portfolio-total').textContent=total.toFixed(2)+' USDC';
+
+  // กราฟแท่งเทียบกำไร/ขาดทุนรายสินทรัพย์ (รวมทุกประเภท คริปโต+ทองคำ+อนาคต อัตโนมัติ)
+  if(typeof Chart!=='undefined' && canvas){
+    var labels=rows.map(function(r){return AGENT_COIN_LABELS[r.w.coin]||r.w.coin.toUpperCase();});
+    var data=rows.map(function(r){return Math.round((r.value-r.w.allocated)*100)/100;});
+    var colors=rows.map(function(r){return (r.value-r.w.allocated)>=0?'#34d399':'#f87171';});
+    if(_agentPortChart){ _agentPortChart.destroy(); }
+    _agentPortChart=new Chart(canvas.getContext('2d'),{
+      type:'bar',
+      data:{ labels:labels, datasets:[{ label:'กำไร/ขาดทุน (USDC)', data:data, backgroundColor:colors, borderRadius:6 }] },
+      options:{
+        responsive:true,
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} },
+          y:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} }
+        }
+      }
+    });
+  } else if(canvas){
+    canvas.parentElement.innerHTML='<div style="text-align:center;padding:20px;color:var(--fg-m);font-size:.7rem">โหลดกราฟไม่ได้ — ต้องเชื่อมต่ออินเทอร์เน็ต</div>';
+  }
 
   box.innerHTML='';
   rows.forEach(function(r){
@@ -4693,83 +4721,6 @@ function renderAgentPortfolio(){
       (r.hasData?'':'<div style="font-size:.6rem;color:var(--fg-m);margin-top:2px">รอราคาล่าสุด...</div>');
     box.appendChild(row);
   });
-}
-function openPLStats(){
-  document.getElementById('agent-list-view').style.display='none';
-  document.getElementById('agent-add-view').style.display='none';
-  document.getElementById('agent-history-view').style.display='none';
-  document.getElementById('agent-portfolio-view').style.display='none';
-  document.getElementById('agent-budget-edit').style.display='none';
-  document.getElementById('agent-plstats-view').style.display='block';
-  document.getElementById('modal-agent').classList.add('open');
-  startAgentPolling();
-  renderPLStats();
-}
-function hidePLStats(){
-  document.getElementById('agent-plstats-view').style.display='none';
-  document.getElementById('modal-agent').classList.remove('open');
-}
-var _plStatsChart=null;
-function renderPLStats(){
-  var list=getAgentWatches().filter(function(w){return (w.allocated||0)>0;});
-  var listBox=document.getElementById('plstats-list');
-  var canvas=document.getElementById('plstats-canvas');
-  if(list.length===0){
-    if(listBox) listBox.innerHTML='<div class="agent-empty">ยังไม่มีสินทรัพย์ที่ลงทุนไว้<br>ไปเพิ่มเหรียญ/ทองคำก่อนครับ</div>';
-    if(_plStatsChart){ _plStatsChart.destroy(); _plStatsChart=null; }
-    return;
-  }
-  var rows=list.map(function(w){
-    var label=AGENT_COIN_LABELS[w.coin]||w.coin.toUpperCase();
-    var value, hasData;
-    if(w.coin==='gold'){
-      value = typeof w.manualValue==='number' ? w.manualValue : w.allocated;
-      hasData=true;
-    } else {
-      var price=_agentPriceCache[w.coin];
-      hasData = w.basePrice>0 && typeof price==='number';
-      var qty = hasData ? (w.allocated/w.basePrice) : 0;
-      value = hasData ? (qty*price) : w.allocated;
-    }
-    var profit=value-w.allocated;
-    var profitPct = w.allocated>0 ? (profit/w.allocated*100) : 0;
-    return {label:label, coin:w.coin, invested:w.allocated, value:value, profit:profit, profitPct:profitPct, hasData:hasData};
-  });
-
-  if(typeof Chart!=='undefined' && canvas){
-    var ctx=canvas.getContext('2d');
-    var labels=rows.map(function(r){return r.label;});
-    var data=rows.map(function(r){return Math.round(r.profit*100)/100;});
-    var colors=rows.map(function(r){return r.profit>=0?'#34d399':'#f87171';});
-    if(_plStatsChart){ _plStatsChart.destroy(); }
-    _plStatsChart=new Chart(ctx,{
-      type:'bar',
-      data:{ labels:labels, datasets:[{ label:'กำไร/ขาดทุน (USDC)', data:data, backgroundColor:colors, borderRadius:6 }] },
-      options:{
-        responsive:true,
-        plugins:{ legend:{display:false} },
-        scales:{
-          x:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} },
-          y:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} }
-        }
-      }
-    });
-  } else if(canvas){
-    canvas.parentElement.innerHTML='<div style="text-align:center;padding:20px;color:var(--fg-m);font-size:.7rem">โหลดกราฟไม่ได้ — ต้องเชื่อมต่ออินเทอร์เน็ต</div>';
-  }
-
-  if(listBox){
-    listBox.innerHTML=rows.map(function(r){
-      var sign=r.profit>=0?'+':'';
-      return '<div class="agent-port-row">'+
-        '<div class="agent-port-top">'+
-          '<span style="display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700">'+agentCoinIconHTML(r.coin,20)+r.label+'</span>'+
-          '<span style="font-size:.78rem;font-weight:700;color:'+(r.profit>=0?'var(--green)':'var(--red)')+'">'+sign+r.profit.toFixed(2)+' USDC ('+sign+r.profitPct.toFixed(1)+'%)</span>'+
-        '</div>'+
-        (r.hasData?'':'<div style="font-size:.6rem;color:var(--fg-m);margin-top:2px">รอราคาล่าสุด...</div>')+
-      '</div>';
-    }).join('');
-  }
 }
 function clearAgentHistory(){
   save(agentHistoryKey(),[]);
