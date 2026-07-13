@@ -2846,10 +2846,12 @@ function handleProfilePhoto(e){
 var _scanStream = null;
 var _scanLoop = null;
 var _scanParsed = { address: null, amount: null };
+var _lastUnrecognizedQR = null;
 
 function openScanPay() {
   requireWallet('สแกนจ่าย', function(){
     _scanParsed = { address: null, amount: null };
+    _lastUnrecognizedQR = null;
     document.getElementById('scan-result-preview').style.display = 'none';
     document.getElementById('scan-manual-input').value = '';
     document.getElementById('scan-pay-btn').disabled = true;
@@ -2891,6 +2893,10 @@ async function startCameraScan() {
               stopCameraScan();
               applyParsedQR(parsed);
               return;
+            } else if (raw !== _lastUnrecognizedQR) {
+              // เจอ QR แล้วแต่ไม่ใช่ที่อยู่กระเป๋าคริปโต (เช่น QR พร้อมเพย์ของร้านค้าทั่วไป) — แจ้งให้รู้ทันที กันเข้าใจผิดว่าสแกนไม่ติด
+              _lastUnrecognizedQR = raw;
+              toast('error', 'QR นี้ไม่ใช่ที่อยู่กระเป๋าคริปโต (อาจเป็น QR พร้อมเพย์ ซึ่งแอปนี้ยังใช้จ่ายด้วยไม่ได้)');
             }
           }
         }
@@ -5421,9 +5427,17 @@ function startRunTracking(){
   if(missionRun.watching) return;
   missionRun.watching=true; missionRun.points=[]; missionRun.distanceKm=0; missionRun.startTime=Date.now();
   missionRun.steps=0; missionRun.lastStepMag=9.8; missionRun.lastStepTime=0; missionRun.smoothedMag=null; missionRun.stepPhase='down'; missionRun.accSum=0; missionRun.accCount=0;
+  missionRun.rejectedCount=0; missionRun.warnedWeakSignal=false;
   missionRun.watchId=navigator.geolocation.watchPosition(function(pos){
     var acc=pos.coords.accuracy; // ความแม่นยำเป็นเมตร ยิ่งน้อยยิ่งแม่น
-    if(typeof acc==='number' && acc>25){ return; } // สัญญาณ GPS แม่นยำไม่พอ (เช่น ในตึก/ใต้ต้นไม้) ข้ามจุดนี้ไปเลย ไม่นับระยะ
+    if(typeof acc==='number' && acc>50){ // ผ่อนเกณฑ์จาก 25 เป็น 50 เมตร เดิมเข้มไปจนหลายคน GPS จริงไม่เคยแม่นถึง เลยไม่นับระยะเลยสักจุด
+      missionRun.rejectedCount++;
+      if(!missionRun.warnedWeakSignal && missionRun.rejectedCount>=8 && (Date.now()-missionRun.startTime)>15000){
+        missionRun.warnedWeakSignal=true;
+        toast('error','สัญญาณ GPS อ่อนมาก (คลาดเคลื่อนเกิน 50 เมตรตลอด) — ลองออกไปที่โล่งแจ้ง ไกลจากตึก/หลังคา');
+      }
+      return; // สัญญาณ GPS แม่นยำไม่พอ (เช่น ในตึก/ใต้ต้นไม้) ข้ามจุดนี้ไปเลย ไม่นับระยะ
+    }
     if(typeof acc==='number'){ missionRun.accSum+=acc; missionRun.accCount++; }
     var p={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now(),alt:(typeof pos.coords.altitude==='number'?pos.coords.altitude:null)};
     if(missionRun.points.length>0){
