@@ -435,6 +435,58 @@
     .mission-set-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .mission-set-row label{flex:1;font-size:.68rem;color:var(--fg-m)}
     .mission-set-row input{width:90px;flex-shrink:0}
+
+    /* CatRun — หน้าจอวิ่งแบบ FitCat (ทุกคลาสขึ้นต้น cr- กันชนกับของเดิม) */
+    .cr-progress-section{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0 0}
+    .cr-ring-container{position:relative;width:240px;height:240px;flex-shrink:0;margin:0 auto}
+    .cr-ring-svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+    .cr-ring-track{fill:none;stroke:#2a2850;stroke-width:8}
+    .cr-ring-progress{fill:none;stroke:url(#crPurpleGrad);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 6px rgba(139,95,207,.35))}
+    .cr-ring-progress-glow{fill:none;stroke:url(#crPurpleGrad);stroke-width:14;stroke-linecap:round;opacity:.15;filter:blur(5px);transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
+    .cr-spinner-svg{position:absolute;inset:0;width:100%;height:100%}
+    .cr-spinner-group{transform-origin:120px 120px;animation:crSpin 3s linear infinite}
+    .cr-spinner-group.fast{animation-duration:1.2s}
+    .cr-spinner-glow-arc{fill:none;stroke:var(--pink);stroke-width:10;stroke-linecap:round;opacity:.12}
+    .cr-spinner-main-arc{fill:none;stroke:var(--pink);stroke-width:4;stroke-linecap:round;opacity:.8;filter:drop-shadow(0 0 8px rgba(244,114,182,.7))}
+    .cr-spinner-head-dot{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;opacity:.9;filter:drop-shadow(0 0 5px rgba(244,114,182,.9))}
+    @keyframes crSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .cr-cat-inner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:186px;height:186px;border-radius:50%;
+      background:radial-gradient(circle at 40% 35%,#2d2650,#1a1738 70%,#13112a);box-shadow:inset 0 2px 12px rgba(139,95,207,.08),0 0 30px rgba(0,0,0,.3);
+      overflow:hidden;display:flex;align-items:center;justify-content:center}
+    .cr-cat-runner{animation:crCatBounce .6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+    .cr-cat-runner img{width:140px;height:auto;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(139,95,207,.25))}
+    .cr-cat-runner.paused{animation:none}
+    @keyframes crCatBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+    .cr-dust-trail{position:absolute;bottom:28px;left:50%;transform:translateX(-55%);display:flex;gap:4px;z-index:3}
+    .cr-dust{width:5px;height:5px;border-radius:50%;background:var(--pink);opacity:0;animation:crDustPuff .8s ease-out infinite}
+    .cr-dust:nth-child(2){animation-delay:.12s}.cr-dust:nth-child(3){animation-delay:.24s}.cr-dust:nth-child(4){animation-delay:.36s}
+    @keyframes crDustPuff{0%{opacity:.5;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(-18px,-8px) scale(.2)}}
+    .cr-step-info{text-align:center;padding:10px 0 0;flex-shrink:0}
+    .cr-step-count{font-size:38px;font-weight:900;line-height:1;letter-spacing:-1px;color:var(--fg)}
+    .cr-step-unit{font-size:13px;color:var(--purple-light);font-weight:700;margin-top:2px}
+    .cr-step-target{font-size:11px;color:var(--fg-m);margin-top:4px;font-weight:500}
+    .cr-progress-percent{margin-top:4px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;color:var(--fg-m)}
+    .cr-progress-percent .cr-pct{font-weight:700;color:var(--pink);font-size:13px}
+    .cr-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px 20px 6px}
+    .cr-stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:12px 8px 10px;text-align:center}
+    .cr-stat-icon{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:13px}
+    .cr-stat-card:nth-child(1) .cr-stat-icon{background:rgba(52,211,153,.12);color:var(--green)}
+    .cr-stat-card:nth-child(2) .cr-stat-icon{background:rgba(251,146,60,.12);color:#fb923c}
+    .cr-stat-card:nth-child(3) .cr-stat-icon{background:rgba(139,95,207,.12);color:var(--purple-light)}
+    .cr-stat-value{font-size:17px;font-weight:800;line-height:1.2;color:var(--fg)}
+    .cr-stat-label{font-size:10px;color:var(--fg-m);margin-top:2px;font-weight:500}
+    .cr-weekly-section{padding:10px 20px 4px}
+    .cr-weekly-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .cr-weekly-title{font-size:13px;font-weight:700;color:var(--fg)}
+    .cr-weekly-bars{display:flex;justify-content:space-between;align-items:flex-end;gap:4px;height:62px}
+    .cr-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+    .cr-bar-wrapper{width:100%;height:46px;display:flex;align-items:flex-end;justify-content:center}
+    .cr-bar{width:14px;border-radius:6px;background:#2a2850;transition:height .8s cubic-bezier(.4,0,.2,1);min-height:4px}
+    .cr-bar.active{background:linear-gradient(to top,var(--purple-mid),var(--purple-light))}
+    .cr-bar.today{background:linear-gradient(to top,var(--purple-mid),var(--pink))}
+    .cr-bar-day{font-size:9px;color:var(--fg-m);font-weight:600}
+    .cr-bar-col.today .cr-bar-day{color:var(--pink)}
+    .cr-start-section{padding:10px 20px 16px}
     .missions-screen{padding-bottom:100px}
     .bn-center{margin-top:-22px;width:52px;height:52px;
       background:linear-gradient(135deg,var(--purple-mid),var(--pink));border-radius:50%;
@@ -869,6 +921,81 @@
       <div id="run-map-stats" style="font-size:.68rem;color:var(--fg-m);margin-bottom:12px"></div>
       <div id="run-map" style="width:100%;height:300px;border-radius:14px;overflow:hidden;background:#1a1030"></div>
       <button class="w-btn" style="margin-top:14px" onclick="hideRunMapModal()">ปิด</button>
+    </div>
+  </div>
+
+  <div class="screen catrun-screen" id="scr-catrun">
+    <div class="page-hdr">
+      <button class="page-back" onclick="navigate('health')">‹</button>
+      <span class="page-title">วิ่งออกกำลังกาย</span>
+    </div>
+
+    <section class="cr-progress-section">
+      <div class="cr-ring-container">
+        <svg class="cr-ring-svg" viewBox="0 0 240 240">
+          <defs>
+            <linearGradient id="crPurpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#A78BFA"/>
+              <stop offset="50%" stop-color="#8B5FCF"/>
+              <stop offset="100%" stop-color="#F472B6"/>
+            </linearGradient>
+          </defs>
+          <circle class="cr-ring-track" cx="120" cy="120" r="110"/>
+          <circle class="cr-ring-progress-glow" id="crRingGlow" cx="120" cy="120" r="110"/>
+          <circle class="cr-ring-progress" id="crRingProgress" cx="120" cy="120" r="110"/>
+        </svg>
+        <svg class="cr-spinner-svg" viewBox="0 0 240 240">
+          <g class="cr-spinner-group" id="crSpinnerGroup">
+            <circle class="cr-spinner-glow-arc" cx="120" cy="120" r="110" stroke-dasharray="92 600" stroke-dashoffset="0"/>
+            <circle class="cr-spinner-main-arc" cx="120" cy="120" r="110" stroke-dasharray="74 618" stroke-dashoffset="0"/>
+            <circle class="cr-spinner-head-dot" cx="120" cy="120" r="110" stroke-dasharray="6 686" stroke-dashoffset="-74"/>
+          </g>
+        </svg>
+        <div class="cr-cat-inner">
+          <div class="cr-cat-runner" id="crCatRunner">
+            <div style="font-size:96px;line-height:1">🐈</div>
+          </div>
+        </div>
+        <div class="cr-dust-trail" id="crDustTrail">
+          <div class="cr-dust"></div><div class="cr-dust"></div><div class="cr-dust"></div><div class="cr-dust"></div>
+        </div>
+      </div>
+
+      <div class="cr-step-info">
+        <div class="cr-step-count" id="crDistCount">0.00</div>
+        <div class="cr-step-unit">กม.</div>
+        <div class="cr-step-target" id="crStepTarget">เป้าหมาย 1 กม./วัน</div>
+      </div>
+      <div class="cr-progress-percent">
+        <span class="cr-pct" id="crPctText">0%</span> ของเป้าหมายวันนี้
+      </div>
+    </section>
+
+    <section class="cr-stats-grid">
+      <div class="cr-stat-card">
+        <div class="cr-stat-icon">👣</div>
+        <div class="cr-stat-value" id="crStepsVal">0</div>
+        <div class="cr-stat-label">ก้าว</div>
+      </div>
+      <div class="cr-stat-card">
+        <div class="cr-stat-icon">🔥</div>
+        <div class="cr-stat-value" id="crCalVal">0</div>
+        <div class="cr-stat-label">แคลอรี่</div>
+      </div>
+      <div class="cr-stat-card">
+        <div class="cr-stat-icon">⏱️</div>
+        <div class="cr-stat-value" id="crTimeVal">0</div>
+        <div class="cr-stat-label">นาที</div>
+      </div>
+    </section>
+
+    <section class="cr-weekly-section">
+      <div class="cr-weekly-header"><span class="cr-weekly-title">สัปดาห์นี้</span></div>
+      <div class="cr-weekly-bars" id="crWeeklyBars"></div>
+    </section>
+
+    <div class="cr-start-section">
+      <button class="w-btn" id="crStartBtn" onclick="crToggleRun()"><span id="crStartBtnLabel">▶️ เริ่มวิ่ง</span></button>
     </div>
   </div>
 
@@ -2360,6 +2487,7 @@ function navigate(screenId) {
   if(screenId==='travel')renderTravel();
   if(screenId==='health')renderHealth();
   if(screenId==='missions')renderMissions();
+  if(screenId==='catrun')renderCatRunScreen();
   closeAllModals();
 }
 
@@ -5481,6 +5609,72 @@ function updatePersonalStride(memberId, gpsKm, steps, gpsWeight){
   m.strideLength[memberId] = old ? (old*0.7+strideM*0.3) : strideM; // ค่อยๆ ปรับด้วย EMA ให้เสถียร ไม่แกว่งง่าย
   saveMissions(m);
 }
+// ============================================================
+// หน้าจอ CatRun — UI ตอนวิ่ง (ยืมดีไซน์จาก FitCat มาปรับให้ใช้ข้อมูลจริงของเรา)
+// ============================================================
+function renderCatRunScreen(){
+  var member=getCurrentMember(); if(!member) return;
+  var m=getMissions();
+  var goal=m.settings.runGoalKm;
+  document.getElementById('crStepTarget').textContent='เป้าหมาย '+goal+' กม./วัน';
+
+  // ปุ่ม + สถานะสปินเนอร์/คาแมว ให้ตรงกับว่ากำลังวิ่งอยู่ตอนนี้ไหม
+  var runner=document.getElementById('crCatRunner'), spinner=document.getElementById('crSpinnerGroup');
+  var dustTrail=document.getElementById('crDustTrail');
+  var btnLabel=document.getElementById('crStartBtnLabel');
+  if(missionRun.watching){
+    btnLabel.textContent='⏹ จบการวิ่ง';
+    if(spinner) spinner.classList.add('fast');
+    if(runner) runner.classList.remove('paused');
+    if(dustTrail) dustTrail.style.opacity='1';
+  } else {
+    btnLabel.textContent='▶️ เริ่มวิ่ง';
+    if(spinner) spinner.classList.remove('fast');
+    if(runner) runner.classList.add('paused');
+    if(dustTrail) dustTrail.style.opacity='.3';
+  }
+
+  // สแตติกไว้ก่อน เดี๋ยว updateCatRunLive() จะมาอัปเดตสดถ้ากำลังวิ่งอยู่ (ทุกวินาที ผ่าน updateRunLiveDisplay)
+  var todayStr=healthLocalDateStr();
+  var todayBase=getDayTotalDistance(member.id, todayStr);
+  var liveTotal=todayBase+(missionRun.watching?missionRun.distanceKm:0);
+  var pct=Math.min(100, goal>0?(liveTotal/goal*100):0);
+  var circ=2*Math.PI*110;
+  document.getElementById('crDistCount').textContent=liveTotal.toFixed(2);
+  document.getElementById('crPctText').textContent=pct.toFixed(0)+'%';
+  var ring=document.getElementById('crRingProgress'), glow=document.getElementById('crRingGlow');
+  ring.style.strokeDasharray=circ; glow.style.strokeDasharray=circ;
+  var off=circ-(pct/100)*circ;
+  requestAnimationFrame(function(){ ring.style.strokeDashoffset=off; glow.style.strokeDashoffset=off; });
+  document.getElementById('crStepsVal').textContent=(missionRun.watching?missionRun.steps:0).toLocaleString();
+  document.getElementById('crCalVal').textContent=Math.round((missionRun.watching?missionRun.distanceKm:0)*60);
+  var sec=missionRun.watching?Math.round((Date.now()-missionRun.startTime)/1000):0;
+  document.getElementById('crTimeVal').textContent=Math.floor(sec/60);
+
+  // แถบรายสัปดาห์ — ใช้ข้อมูลจริงจากภารกิจวิ่ง (% ของเป้าหมายแต่ละวัน)
+  var weekStart=missionWeekStart(new Date());
+  var thDays=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  var bars=document.getElementById('crWeeklyBars');
+  bars.innerHTML='';
+  var todayDateStr=healthLocalDateStr();
+  for(var i=0;i<7;i++){
+    var d=new Date(weekStart); d.setDate(d.getDate()+i);
+    var dStr=healthLocalDateStr(d);
+    var isToday=(dStr===todayDateStr);
+    var dayTotal=getDayTotalDistance(member.id, dStr)+(isToday&&missionRun.watching?missionRun.distanceKm:0);
+    var dayPct=Math.min(100, goal>0?(dayTotal/goal*100):0);
+    var col=document.createElement('div');
+    col.className='cr-bar-col'+(isToday?' today':'');
+    var barCls=isToday?'today':(dayPct>0?'active':'');
+    col.innerHTML='<div class="cr-bar-wrapper"><div class="cr-bar '+barCls+'" style="height:'+Math.max(4,dayPct/100*46).toFixed(0)+'px"></div></div>'+
+      '<span class="cr-bar-day">'+thDays[d.getDay()]+'</span>';
+    bars.appendChild(col);
+  }
+}
+function crToggleRun(){
+  if(missionRun.watching){ stopRunTracking(); } else { startRunTracking(); }
+  renderCatRunScreen();
+}
 function startRunTracking(){
   if(!navigator.geolocation){toast('error','อุปกรณ์นี้ไม่รองรับ GPS');return;}
   if(missionRun.watching) return;
@@ -5554,11 +5748,34 @@ function handleDeviceMotion(e){
 }
 function updateRunLiveDisplay(){
   var distEl=document.getElementById('mission-run-dist'), timeEl=document.getElementById('mission-run-time'), stepEl=document.getElementById('mission-run-steps');
-  if(!distEl||!timeEl) return;
-  distEl.textContent=missionRun.distanceKm.toFixed(2)+' กม.';
   var sec=Math.round((Date.now()-missionRun.startTime)/1000);
-  timeEl.textContent=Math.floor(sec/60).toString().padStart(2,'0')+':'+(sec%60).toString().padStart(2,'0');
-  if(stepEl) stepEl.textContent=(missionRun.steps||0)+' ก้าว';
+  if(distEl && timeEl){
+    distEl.textContent=missionRun.distanceKm.toFixed(2)+' กม.';
+    timeEl.textContent=Math.floor(sec/60).toString().padStart(2,'0')+':'+(sec%60).toString().padStart(2,'0');
+    if(stepEl) stepEl.textContent=(missionRun.steps||0)+' ก้าว';
+  }
+  updateCatRunLive(sec);
+}
+// อัปเดตหน้าจอ CatRun แบบสด (ถ้าหน้านั้นเปิดอยู่ตอนนี้) — เรียกจาก updateRunLiveDisplay ทุกวินาที
+function updateCatRunLive(sec){
+  var distEl=document.getElementById('crDistCount'); if(!distEl) return; // หน้า CatRun ไม่ได้เปิดอยู่ ข้าม
+  var member=getCurrentMember(); if(!member) return;
+  var m=getMissions();
+  var goal=m.settings.runGoalKm;
+  var todayStr=healthLocalDateStr();
+  var todayBase=getDayTotalDistance(member.id, todayStr); // ระยะที่วิ่งสำเร็จไปแล้วก่อนรอบนี้ (รอบก่อนหน้าของวันนี้)
+  var liveTotal=todayBase+missionRun.distanceKm;
+  distEl.textContent=liveTotal.toFixed(2);
+  var pct=Math.min(100, goal>0 ? (liveTotal/goal*100) : 0);
+  var circ=2*Math.PI*110;
+  var off=circ-(pct/100)*circ;
+  var ring=document.getElementById('crRingProgress'), glow=document.getElementById('crRingGlow');
+  if(ring){ ring.style.strokeDasharray=circ; ring.style.strokeDashoffset=off; }
+  if(glow){ glow.style.strokeDasharray=circ; glow.style.strokeDashoffset=off; }
+  var pctText=document.getElementById('crPctText'); if(pctText) pctText.textContent=pct.toFixed(0)+'%';
+  var stepsEl=document.getElementById('crStepsVal'); if(stepsEl) stepsEl.textContent=(missionRun.steps||0).toLocaleString();
+  var calEl=document.getElementById('crCalVal'); if(calEl) calEl.textContent=Math.round(missionRun.distanceKm*60); // ประมาณ 60 kcal ต่อกม. (ค่าเฉลี่ยทั่วไป)
+  var timeEl2=document.getElementById('crTimeVal'); if(timeEl2) timeEl2.textContent=Math.floor((sec||0)/60);
 }
 function checkRunWeeklyStreak(memberId){
   var m=getMissions();
@@ -5638,10 +5855,10 @@ function renderMissionRun(){
   var todayTotalNow=getDayTotalDistance(member.id,todayStr);
   html+='<div class="mission-sub">วันนี้วิ่งรวมแล้ว <b style="color:'+(todayTotalNow>=m.settings.runGoalKm?'var(--green)':'var(--fg)')+'">'+todayTotalNow.toFixed(2)+'</b> / '+m.settings.runGoalKm+' กม. (รวมได้หลายรอบ แต่ข้ามวันจะเริ่มนับใหม่)</div>';
   if(missionRun.watching){
-    html+='<div class="mission-run-live"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div><div class="lbl" id="mission-run-steps" style="margin-top:6px;font-weight:700;color:var(--fg)">0 ก้าว</div></div>';
-    html+='<button class="w-btn" style="background:var(--red)" onclick="stopRunTracking()">⏹ จบการวิ่ง</button>';
+    html+='<div class="mission-run-live" style="cursor:pointer" onclick="navigate(\'catrun\')"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div><div class="lbl" id="mission-run-steps" style="margin-top:6px;font-weight:700;color:var(--fg)">0 ก้าว</div></div>';
+    html+='<button class="w-btn" onclick="navigate(\'catrun\')">🏃 กำลังวิ่งอยู่ • แตะเพื่อดู</button>';
   } else {
-    html+='<button class="w-btn" onclick="startRunTracking()">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
+    html+='<button class="w-btn" onclick="navigate(\'catrun\')">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
   }
   var recent=m.runSessions.filter(function(s){return s.memberId===member.id;}).sort(function(a,b){return b.createdAt-a.createdAt;}).slice(0,5);
   if(recent.length){
