@@ -9,8 +9,7 @@
   <!-- Leaflet (ใช้แสดงแผนที่เส้นทางการวิ่งในภารกิจสุขภาพ) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <!-- Chart.js (ใช้แสดงกราฟกำไร/ขาดทุนรายสินทรัพย์) -->
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <!-- ไม่ใช้ Chart.js แล้ว (เคยโหลดไม่ติดในบางเบราว์เซอร์) เปลี่ยนเป็นกราฟแท่ง CSS ล้วนแทน ไม่พึ่งเน็ตภายนอกเลย -->
   <!-- Firebase (ใช้สำหรับซิงค์รหัสครอบครัว + ตำแหน่ง GPS ข้ามเครื่อง) -->
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1391,7 +1390,15 @@
           <div style="font-size:1.2rem;font-weight:800" id="agent-portfolio-total">0.00 USDC</div>
         </div>
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px" id="agent-portfolio-chart-wrap">
-          <canvas id="plstats-canvas" height="200"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:.72rem;font-weight:700">แนวโน้มมูลค่าพอร์ต</div>
+            <div style="display:flex;gap:6px">
+              <button type="button" id="port-trend-tab-week" class="s-btn" style="width:auto;padding:5px 12px;font-size:.62rem" onclick="switchPortTrendTab('week')">รายสัปดาห์</button>
+              <button type="button" id="port-trend-tab-month" class="s-btn" style="width:auto;padding:5px 12px;font-size:.62rem" onclick="switchPortTrendTab('month')">รายเดือน</button>
+            </div>
+          </div>
+          <div id="port-trend-chart" style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:10px"></div>
+          <div id="port-trend-note" style="font-size:.6rem;color:var(--fg-m);margin-top:8px;line-height:1.5"></div>
         </div>
         <div id="agent-portfolio-list"></div>
         <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="hideAgentPortfolio()">‹ กลับ</button>
@@ -4673,15 +4680,84 @@ function hideAgentPortfolio(){
   document.getElementById('agent-portfolio-view').style.display='none';
   document.getElementById('agent-list-view').style.display='block';
 }
-var _agentPortChart=null;
+// ============================================================
+// แนวโน้มมูลค่าพอร์ตรายสัปดาห์/รายเดือน — เก็บสแนปช็อตวันละ 1 ค่า แล้ววาดกราฟแท่งด้วย CSS ล้วน (ไม่พึ่งไลบรารีเน็ตภายนอก กันปัญหาโหลดไม่ติด)
+// ============================================================
+var _portTrendMode='week';
+function portfolioSnapshotKey(memberId){ return 'pp_port_snap_'+memberId; }
+function getPortfolioSnapshots(memberId){ return load(portfolioSnapshotKey(memberId),[]); }
+function recordPortfolioSnapshot(memberId, value){
+  var list=getPortfolioSnapshots(memberId);
+  var today=healthLocalDateStr();
+  var last=list[list.length-1];
+  if(last && last.date===today){ last.value=value; }
+  else { list.push({date:today, value:value}); }
+  if(list.length>400) list=list.slice(list.length-400); // กันข้อมูลบวมเกินไปในระยะยาว
+  save(portfolioSnapshotKey(memberId), list);
+}
+function switchPortTrendTab(mode){
+  _portTrendMode=mode;
+  renderPortTrendChart(mode);
+}
+function renderPortTrendChart(mode){
+  mode = mode || 'week';
+  var member=getCurrentMember();
+  var chartBox=document.getElementById('port-trend-chart');
+  var noteBox=document.getElementById('port-trend-note');
+  var tabWeek=document.getElementById('port-trend-tab-week');
+  var tabMonth=document.getElementById('port-trend-tab-month');
+  if(!chartBox || !member) return;
+  if(tabWeek && tabMonth){
+    var activeStyle='width:auto;padding:5px 12px;font-size:.62rem;background:linear-gradient(135deg,var(--purple-mid),var(--pink));color:white;border:none';
+    var inactiveStyle='width:auto;padding:5px 12px;font-size:.62rem;background:var(--bg-card);color:var(--fg-m);border:1px solid var(--border)';
+    tabWeek.setAttribute('style', mode==='week'?activeStyle:inactiveStyle);
+    tabMonth.setAttribute('style', mode==='month'?activeStyle:inactiveStyle);
+  }
+  var snaps=getPortfolioSnapshots(member.id);
+  if(snaps.length===0){
+    chartBox.innerHTML='<div style="width:100%;text-align:center;color:var(--fg-m);font-size:.65rem;align-self:center">ยังไม่มีข้อมูลย้อนหลัง เริ่มเก็บตั้งแต่วันนี้เป็นต้นไป</div>';
+    if(noteBox) noteBox.textContent='';
+    return;
+  }
+  // จัดกลุ่มสแนปช็อตรายวันเป็นราย "สัปดาห์" (จ.-อา.) หรือราย "เดือน" โดยใช้ค่าล่าสุดของแต่ละช่วงเป็นตัวแทน
+  var buckets={}; // key -> {label, value, sortKey}
+  snaps.forEach(function(s){
+    var d=new Date(s.date+'T00:00:00');
+    var key, label, sortKey;
+    if(mode==='week'){
+      var ws=missionWeekStart(d);
+      key=healthLocalDateStr(ws);
+      label=(ws.getMonth()+1)+'/'+ws.getDate();
+      sortKey=ws.getTime();
+    } else {
+      key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      var thMonths=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      label=thMonths[d.getMonth()];
+      sortKey=d.getFullYear()*100+d.getMonth();
+    }
+    buckets[key]={label:label, value:s.value, sortKey:sortKey}; // ทับด้วยค่าล่าสุดในช่วงนั้นเสมอ (ข้อมูลเรียงตามวันที่อยู่แล้ว)
+  });
+  var arr=Object.keys(buckets).map(function(k){return buckets[k];}).sort(function(a,b){return a.sortKey-b.sortKey;});
+  var maxBars=mode==='week'?8:6;
+  if(arr.length>maxBars) arr=arr.slice(arr.length-maxBars);
+  var maxVal=Math.max.apply(null,arr.map(function(a){return a.value;}).concat([0.01]));
+  chartBox.innerHTML=arr.map(function(a){
+    var pct=Math.max(4,(a.value/maxVal*100));
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">'+
+      '<div style="font-size:.58rem;color:var(--fg-m);margin-bottom:4px">'+a.value.toFixed(0)+'</div>'+
+      '<div style="width:100%;max-width:28px;height:'+pct.toFixed(0)+'%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--purple-light),var(--purple-mid))"></div>'+
+      '<div style="font-size:.56rem;color:var(--fg-m);margin-top:4px">'+a.label+'</div>'+
+    '</div>';
+  }).join('');
+  if(noteBox) noteBox.textContent=(mode==='week'?'แสดงมูลค่าพอร์ต ณ สิ้นแต่ละสัปดาห์':'แสดงมูลค่าพอร์ต ณ สิ้นแต่ละเดือน')+' (เริ่มเก็บข้อมูลตั้งแต่วันที่เปิดใช้ฟีเจอร์นี้ ยังไม่มีประวัติย้อนหลังก่อนหน้านั้น)';
+}
 function renderAgentPortfolio(){
   var list=getAgentWatches().filter(function(w){return (w.allocated||0)>0;});
   var box=document.getElementById('agent-portfolio-list');
-  var canvas=document.getElementById('plstats-canvas');
   if(list.length===0){
     box.innerHTML='<div class="agent-empty">ยังไม่มีเหรียญที่จัดสรรเงินลงทุนไว้<br>ไปตั้งค่าที่หน้ารายการเฝ้าราคาก่อนครับ</div>';
     document.getElementById('agent-portfolio-total').textContent='0.00 USDC';
-    if(_agentPortChart){ _agentPortChart.destroy(); _agentPortChart=null; }
+    var trendBox=document.getElementById('port-trend-chart'); if(trendBox) trendBox.innerHTML='';
     return;
   }
   var rows=list.map(function(w,i){
@@ -4698,27 +4774,10 @@ function renderAgentPortfolio(){
   var total=rows.reduce(function(s,r){return s+r.value;},0) || 1;
   document.getElementById('agent-portfolio-total').textContent=total.toFixed(2)+' USDC';
 
-  // กราฟแท่งเทียบกำไร/ขาดทุนรายสินทรัพย์ (รวมทุกประเภท คริปโต+ทองคำ+อนาคต อัตโนมัติ)
-  if(typeof Chart!=='undefined' && canvas){
-    var labels=rows.map(function(r){return AGENT_COIN_LABELS[r.w.coin]||r.w.coin.toUpperCase();});
-    var data=rows.map(function(r){return Math.round((r.value-r.w.allocated)*100)/100;});
-    var colors=rows.map(function(r){return (r.value-r.w.allocated)>=0?'#34d399':'#f87171';});
-    if(_agentPortChart){ _agentPortChart.destroy(); }
-    _agentPortChart=new Chart(canvas.getContext('2d'),{
-      type:'bar',
-      data:{ labels:labels, datasets:[{ label:'กำไร/ขาดทุน (USDC)', data:data, backgroundColor:colors, borderRadius:6 }] },
-      options:{
-        responsive:true,
-        plugins:{ legend:{display:false} },
-        scales:{
-          x:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} },
-          y:{ ticks:{color:'#b8ace0', font:{size:10}}, grid:{color:'rgba(255,255,255,.06)'} }
-        }
-      }
-    });
-  } else if(canvas){
-    canvas.parentElement.innerHTML='<div style="text-align:center;padding:20px;color:var(--fg-m);font-size:.7rem">โหลดกราฟไม่ได้ — ต้องเชื่อมต่ออินเทอร์เน็ต</div>';
-  }
+  // บันทึกมูลค่าพอร์ตของวันนี้ไว้ (วันละ 1 ค่า) เพื่อเอาไปสร้างกราฟแนวโน้มรายสัปดาห์/รายเดือน
+  var member=getCurrentMember();
+  if(member) recordPortfolioSnapshot(member.id, total);
+  renderPortTrendChart(_portTrendMode||'week');
 
   box.innerHTML='';
   rows.forEach(function(r){
