@@ -451,11 +451,11 @@
     .cr-spinner-head-dot{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;opacity:.9;filter:drop-shadow(0 0 5px rgba(244,114,182,.9))}
     @keyframes crSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
     .cr-cat-inner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:186px;height:186px;border-radius:50%;
-      background:radial-gradient(circle at 40% 35%,#2d2650,#1a1738 70%,#13112a);box-shadow:inset 0 2px 12px rgba(139,95,207,.08),0 0 30px rgba(0,0,0,.3);
-      overflow:hidden;display:flex;align-items:center;justify-content:center}
-    .cr-cat-runner{animation:crCatBounce .6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
-    .cr-cat-runner img{width:140px;height:auto;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(139,95,207,.25))}
-    .cr-cat-runner.paused{animation:none}
+      background:#ffffff;box-shadow:0 0 30px rgba(0,0,0,.3);
+      display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .cr-cat-runner{animation:crCatBounce .6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;
+      width:132px;height:132px;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 40% 35%,#2d2650,#1a1738 70%,#13112a)}
+    .cr-cat-runner img{width:100%;height:100%;object-fit:cover}
     @keyframes crCatBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
     .cr-dust-trail{position:absolute;bottom:28px;left:50%;transform:translateX(-55%);display:flex;gap:4px;z-index:3}
     .cr-dust{width:5px;height:5px;border-radius:50%;background:var(--pink);opacity:0;animation:crDustPuff .8s ease-out infinite}
@@ -951,11 +951,13 @@
             <circle class="cr-spinner-head-dot" cx="120" cy="120" r="110" stroke-dasharray="6 686" stroke-dashoffset="-74"/>
           </g>
         </svg>
-        <div class="cr-cat-inner">
+        <div class="cr-cat-inner" onclick="document.getElementById('crPhotoFile').click()">
           <div class="cr-cat-runner" id="crCatRunner">
-            <div style="font-size:96px;line-height:1">🐈</div>
+            <div style="font-size:64px;line-height:1" id="crCatEmoji">🐈</div>
+            <img src="" id="crCatPhoto" style="display:none">
           </div>
         </div>
+        <input type="file" id="crPhotoFile" accept="image/*" style="display:none" onchange="crHandlePhotoUpload(event)">
         <div class="cr-dust-trail" id="crDustTrail">
           <div class="cr-dust"></div><div class="cr-dust"></div><div class="cr-dust"></div><div class="cr-dust"></div>
         </div>
@@ -993,10 +995,6 @@
       <div class="cr-weekly-header"><span class="cr-weekly-title">สัปดาห์นี้</span></div>
       <div class="cr-weekly-bars" id="crWeeklyBars"></div>
     </section>
-
-    <div class="cr-start-section">
-      <button class="w-btn" id="crStartBtn" onclick="crToggleRun()"><span id="crStartBtnLabel">▶️ เริ่มวิ่ง</span></button>
-    </div>
   </div>
 
   <div class="screen family-screen" id="scr-family">
@@ -5617,20 +5615,16 @@ function renderCatRunScreen(){
   var m=getMissions();
   var goal=m.settings.runGoalKm;
   document.getElementById('crStepTarget').textContent='เป้าหมาย '+goal+' กม./วัน';
+  crLoadPhoto();
 
-  // ปุ่ม + สถานะสปินเนอร์/คาแมว ให้ตรงกับว่ากำลังวิ่งอยู่ตอนนี้ไหม
-  var runner=document.getElementById('crCatRunner'), spinner=document.getElementById('crSpinnerGroup');
+  // สถานะสปินเนอร์/ฝุ่น ให้ตรงกับว่ากำลังวิ่งอยู่ตอนนี้ไหม (แมวเด้งตลอดเวลาเหมือนเดิม ไม่หยุด)
+  var spinner=document.getElementById('crSpinnerGroup');
   var dustTrail=document.getElementById('crDustTrail');
-  var btnLabel=document.getElementById('crStartBtnLabel');
   if(missionRun.watching){
-    btnLabel.textContent='⏹ จบการวิ่ง';
     if(spinner) spinner.classList.add('fast');
-    if(runner) runner.classList.remove('paused');
     if(dustTrail) dustTrail.style.opacity='1';
   } else {
-    btnLabel.textContent='▶️ เริ่มวิ่ง';
     if(spinner) spinner.classList.remove('fast');
-    if(runner) runner.classList.add('paused');
     if(dustTrail) dustTrail.style.opacity='.3';
   }
 
@@ -5670,6 +5664,40 @@ function renderCatRunScreen(){
       '<span class="cr-bar-day">'+thDays[d.getDay()]+'</span>';
     bars.appendChild(col);
   }
+}
+function crPhotoKey(memberId){ return 'pp_catrun_photo_'+memberId; }
+function crHandlePhotoUpload(e){
+  var file=e.target.files[0]; if(!file) return;
+  var member=getCurrentMember(); if(!member) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas'); var size=200;
+      var side=Math.min(img.width,img.height);
+      canvas.width=size; canvas.height=size;
+      var sx=(img.width-side)/2, sy=(img.height-side)/2;
+      canvas.getContext('2d').drawImage(img,sx,sy,side,side,0,0,size,size);
+      var dataUrl=canvas.toDataURL('image/jpeg',0.85);
+      save(crPhotoKey(member.id), dataUrl);
+      crApplyPhoto(dataUrl);
+      toast('success','เปลี่ยนรูปแล้ว');
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function crApplyPhoto(dataUrl){
+  var photoEl=document.getElementById('crCatPhoto'), emojiEl=document.getElementById('crCatEmoji');
+  if(!photoEl||!emojiEl) return;
+  if(dataUrl){ photoEl.src=dataUrl; photoEl.style.display='block'; emojiEl.style.display='none'; }
+  else { photoEl.style.display='none'; emojiEl.style.display='block'; }
+}
+function crLoadPhoto(){
+  var member=getCurrentMember(); if(!member) return;
+  var saved=load(crPhotoKey(member.id), null);
+  crApplyPhoto(saved);
 }
 function crToggleRun(){
   if(missionRun.watching){ stopRunTracking(); } else { startRunTracking(); }
@@ -5856,9 +5884,9 @@ function renderMissionRun(){
   html+='<div class="mission-sub">วันนี้วิ่งรวมแล้ว <b style="color:'+(todayTotalNow>=m.settings.runGoalKm?'var(--green)':'var(--fg)')+'">'+todayTotalNow.toFixed(2)+'</b> / '+m.settings.runGoalKm+' กม. (รวมได้หลายรอบ แต่ข้ามวันจะเริ่มนับใหม่)</div>';
   if(missionRun.watching){
     html+='<div class="mission-run-live" style="cursor:pointer" onclick="navigate(\'catrun\')"><div class="big" id="mission-run-dist">0.00 กม.</div><div class="lbl" id="mission-run-time">00:00</div><div class="lbl" id="mission-run-steps" style="margin-top:6px;font-weight:700;color:var(--fg)">0 ก้าว</div></div>';
-    html+='<button class="w-btn" onclick="navigate(\'catrun\')">🏃 กำลังวิ่งอยู่ • แตะเพื่อดู</button>';
+    html+='<div style="display:flex;gap:8px"><button class="w-btn" style="flex:1" onclick="navigate(\'catrun\')">🏃 กำลังวิ่งอยู่ • แตะเพื่อดู</button><button class="w-btn" style="flex:0 0 auto;width:auto;padding:0 18px;background:var(--red)" onclick="stopRunTracking()">⏹</button></div>';
   } else {
-    html+='<button class="w-btn" onclick="navigate(\'catrun\')">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
+    html+='<button class="w-btn" onclick="startRunTracking(); navigate(\'catrun\');">▶️ เริ่มวิ่ง (เปิด GPS)</button>';
   }
   var recent=m.runSessions.filter(function(s){return s.memberId===member.id;}).sort(function(a,b){return b.createdAt-a.createdAt;}).slice(0,5);
   if(recent.length){
