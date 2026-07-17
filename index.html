@@ -454,8 +454,15 @@
       background:#ffffff;box-shadow:0 0 30px rgba(0,0,0,.3);
       display:flex;align-items:center;justify-content:center;cursor:pointer}
     .cr-cat-runner{animation:crCatBounce .6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;
-      width:132px;height:132px;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 40% 35%,#2d2650,#1a1738 70%,#13112a)}
+      width:132px;height:132px;border-radius:50%;overflow:hidden;background:#ffffff;border:2px dashed rgba(139,95,207,.35)}
     .cr-cat-runner img{width:100%;height:100%;object-fit:cover}
+    .cr-cat-add-label{font-size:12px;font-weight:700;color:var(--purple-mid);text-align:center;line-height:1.4;padding:0 8px}
+    .cr-preset-slot{aspect-ratio:1;border-radius:16px;background:var(--bg-card);border:1px solid var(--border);
+      display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden}
+    .cr-preset-slot img{width:100%;height:100%;object-fit:cover}
+    .cr-preset-slot.empty{border:2px dashed var(--border);color:var(--fg-m);font-size:1.4rem}
+    .cr-preset-edit-badge{position:absolute;bottom:3px;right:3px;width:20px;height:20px;border-radius:50%;
+      background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-size:.6rem}
     @keyframes crCatBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
     .cr-dust-trail{position:absolute;bottom:28px;left:50%;transform:translateX(-55%);display:flex;gap:4px;z-index:3}
     .cr-dust{width:5px;height:5px;border-radius:50%;background:var(--pink);opacity:0;animation:crDustPuff .8s ease-out infinite}
@@ -914,6 +921,17 @@
   </div>
 
   <!-- แผนที่เส้นทางการวิ่ง -->
+  <div class="sheet-overlay" id="modal-cr-photo" onclick="closeCrPhotoPickerOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🐾 เลือกเพื่อนวิ่ง</div>
+      <p style="font-size:.65rem;color:var(--fg-m);margin-bottom:14px;line-height:1.6" id="cr-picker-note">เลือกจาก 5 ตัวเลือกที่เจ้าบ้านเตรียมไว้ หรืออัปโหลดรูปของตัวเองก็ได้</p>
+      <div id="cr-preset-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px"></div>
+      <button type="button" class="w-btn" onclick="document.getElementById('crPhotoFile').click()">📷 อัปโหลดรูปของตัวเอง</button>
+      <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:10px" onclick="hideCrPhotoPicker()">ปิด</button>
+    </div>
+  </div>
+
   <div class="sheet-overlay" id="modal-run-map" onclick="closeRunMapOutside(event)">
     <div class="sheet" style="padding-bottom:16px">
       <div class="sheet-handle"></div>
@@ -926,7 +944,7 @@
 
   <div class="screen catrun-screen" id="scr-catrun">
     <div class="page-hdr">
-      <button class="page-back" onclick="navigate('health')">‹</button>
+      <button class="page-back" onclick="navigate('missions')">‹</button>
       <span class="page-title">วิ่งออกกำลังกาย</span>
     </div>
 
@@ -951,9 +969,9 @@
             <circle class="cr-spinner-head-dot" cx="120" cy="120" r="110" stroke-dasharray="6 686" stroke-dashoffset="-74"/>
           </g>
         </svg>
-        <div class="cr-cat-inner" onclick="document.getElementById('crPhotoFile').click()">
+        <div class="cr-cat-inner" onclick="openCrPhotoPicker()">
           <div class="cr-cat-runner" id="crCatRunner">
-            <div style="font-size:64px;line-height:1" id="crCatEmoji">🐈</div>
+            <div class="cr-cat-add-label" id="crCatEmoji">เพิ่ม<br>เพื่อนวิ่ง</div>
             <img src="" id="crCatPhoto" style="display:none">
           </div>
         </div>
@@ -995,6 +1013,10 @@
       <div class="cr-weekly-header"><span class="cr-weekly-title">สัปดาห์นี้</span></div>
       <div class="cr-weekly-bars" id="crWeeklyBars"></div>
     </section>
+
+    <div class="cr-start-section">
+      <button class="w-btn" id="crStartBtn" onclick="crToggleRun()"><span id="crStartBtnLabel">▶️ เริ่มวิ่ง</span></button>
+    </div>
   </div>
 
   <div class="screen family-screen" id="scr-family">
@@ -5617,15 +5639,18 @@ function renderCatRunScreen(){
   document.getElementById('crStepTarget').textContent='เป้าหมาย '+goal+' กม./วัน';
   crLoadPhoto();
 
-  // สถานะสปินเนอร์/ฝุ่น ให้ตรงกับว่ากำลังวิ่งอยู่ตอนนี้ไหม (แมวเด้งตลอดเวลาเหมือนเดิม ไม่หยุด)
+  // สถานะสปินเนอร์/ฝุ่น/ปุ่ม ให้ตรงกับว่ากำลังวิ่งอยู่ตอนนี้ไหม (แมวเด้งตลอดเวลาเหมือนเดิม ไม่หยุด)
   var spinner=document.getElementById('crSpinnerGroup');
   var dustTrail=document.getElementById('crDustTrail');
+  var btnLabel=document.getElementById('crStartBtnLabel');
   if(missionRun.watching){
     if(spinner) spinner.classList.add('fast');
     if(dustTrail) dustTrail.style.opacity='1';
+    if(btnLabel) btnLabel.textContent='⏹ จบการวิ่ง';
   } else {
     if(spinner) spinner.classList.remove('fast');
     if(dustTrail) dustTrail.style.opacity='.3';
+    if(btnLabel) btnLabel.textContent='▶️ เริ่มวิ่ง';
   }
 
   // สแตติกไว้ก่อน เดี๋ยว updateCatRunLive() จะมาอัปเดตสดถ้ากำลังวิ่งอยู่ (ทุกวินาที ผ่าน updateRunLiveDisplay)
@@ -5666,6 +5691,61 @@ function renderCatRunScreen(){
   }
 }
 function crPhotoKey(memberId){ return 'pp_catrun_photo_'+memberId; }
+function crPresetsKey(famCode){ return 'pp_catrun_presets_'+famCode; }
+function getCrPresets(){
+  var fam=getFamily();
+  if(!fam||!fam.code) return [null,null,null,null,null];
+  var list=load(crPresetsKey(fam.code), null);
+  if(!list) list=[null,null,null,null,null];
+  while(list.length<5) list.push(null);
+  return list;
+}
+function saveCrPresets(list){
+  var fam=getFamily(); if(!fam||!fam.code) return;
+  save(crPresetsKey(fam.code), list);
+}
+var _crUploadTarget='personal'; // 'personal' หรือเลข index 0-4 ของช่อง preset ที่กำลังอัปโหลดเข้า
+function openCrPhotoPicker(){
+  document.getElementById('modal-cr-photo').classList.add('open');
+  var member=getCurrentMember();
+  var isHead=member && member.role==='เจ้าบ้าน';
+  document.getElementById('cr-picker-note').textContent = isHead
+    ? 'เลือกจาก 5 ตัวเลือก หรือแตะช่องว่างเพื่ออัปโหลดใหม่ (คุณเป็นเจ้าบ้าน แก้ไขได้ทุกช่อง) หรืออัปโหลดรูปของตัวเอง'
+    : 'เลือกจาก 5 ตัวเลือกที่เจ้าบ้านเตรียมไว้ หรืออัปโหลดรูปของตัวเองก็ได้';
+  renderCrPresetGrid();
+}
+function hideCrPhotoPicker(){ document.getElementById('modal-cr-photo').classList.remove('open'); }
+function closeCrPhotoPickerOutside(e){ if(e.target===e.currentTarget) hideCrPhotoPicker(); }
+function renderCrPresetGrid(){
+  var grid=document.getElementById('cr-preset-grid'); if(!grid) return;
+  var member=getCurrentMember();
+  var isHead=member && member.role==='เจ้าบ้าน';
+  var presets=getCrPresets();
+  grid.innerHTML=presets.map(function(p,i){
+    if(p){
+      return '<div class="cr-preset-slot" onclick="crSelectPreset('+i+')"><img src="'+p+'">'+
+        (isHead?'<div class="cr-preset-edit-badge" onclick="event.stopPropagation();crUploadToPreset('+i+')">✏️</div>':'')+
+        '</div>';
+    }
+    if(isHead){
+      return '<div class="cr-preset-slot empty" onclick="crUploadToPreset('+i+')">＋</div>';
+    }
+    return '<div class="cr-preset-slot empty" style="opacity:.4">—</div>';
+  }).join('');
+}
+function crSelectPreset(i){
+  var presets=getCrPresets();
+  var p=presets[i]; if(!p) return;
+  var member=getCurrentMember(); if(!member) return;
+  save(crPhotoKey(member.id), p);
+  crApplyPhoto(p);
+  hideCrPhotoPicker();
+  toast('success','เปลี่ยนเพื่อนวิ่งแล้ว');
+}
+function crUploadToPreset(i){
+  _crUploadTarget=i;
+  document.getElementById('crPhotoFile').click();
+}
 function crHandlePhotoUpload(e){
   var file=e.target.files[0]; if(!file) return;
   var member=getCurrentMember(); if(!member) return;
@@ -5679,9 +5759,19 @@ function crHandlePhotoUpload(e){
       var sx=(img.width-side)/2, sy=(img.height-side)/2;
       canvas.getContext('2d').drawImage(img,sx,sy,side,side,0,0,size,size);
       var dataUrl=canvas.toDataURL('image/jpeg',0.85);
-      save(crPhotoKey(member.id), dataUrl);
-      crApplyPhoto(dataUrl);
-      toast('success','เปลี่ยนรูปแล้ว');
+      if(_crUploadTarget==='personal'){
+        save(crPhotoKey(member.id), dataUrl);
+        crApplyPhoto(dataUrl);
+        hideCrPhotoPicker();
+        toast('success','เปลี่ยนรูปแล้ว');
+      } else {
+        var presets=getCrPresets();
+        presets[_crUploadTarget]=dataUrl;
+        saveCrPresets(presets);
+        renderCrPresetGrid();
+        toast('success','อัปเดตตัวเลือกที่ '+(_crUploadTarget+1)+' แล้ว');
+      }
+      _crUploadTarget='personal';
     };
     img.src=ev.target.result;
   };
