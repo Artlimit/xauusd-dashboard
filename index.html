@@ -1717,6 +1717,7 @@
         <video id="ai-cam-video" autoplay playsinline muted></video>
         <div class="ai-cam-off" id="ai-cam-off">📷 กล้องปิดอยู่ — แตะไอคอนตาเพื่อเปิด<br>(เป็นเหมือนดวงตาของผู้ช่วย)</div>
         <button type="button" class="ai-vision-toggle" id="ai-vision-toggle" onclick="toggleAIVision()" title="เปิด/ปิดกล้อง">👁️</button>
+        <button type="button" class="ai-vision-toggle" id="ai-cam-flip" onclick="flipAICamera()" title="สลับกล้องหน้า/หลัง" style="right:52px;display:none">🔄</button>
       </div>
       <canvas id="ai-cam-canvas" style="display:none"></canvas>
 
@@ -5152,7 +5153,9 @@ var aiAgentState='idle'; // idle | listening | thinking | speaking
 var _aiCamStream=null;
 var _aiRecognition=null;
 var _aiVisionOn=false;
+var _aiCamFacing='environment'; // 'environment' = กล้องหลัง, 'user' = กล้องหน้า
 var _aiHistory=[]; // [{role,text}]
+var _aiFacts=[]; // ["เลี้ยงแมวชื่อส้มโอ", "ชอบกินก๋วยเตี๋ยวเรือ", ...] ความจำถาวร ไม่ถูกตัดทิ้งเหมือนประวัติแชท
 
 function aiHistoryKey(){ var m=getCurrentMember(); return m?('pp_ai_history_'+m.id):'pp_ai_history_none'; }
 function loadAIHistory(){ _aiHistory=load(aiHistoryKey(),[]); }
@@ -5161,6 +5164,29 @@ function saveAIChat(userText,aiText){
   _aiHistory.push({role:'assistant',text:aiText});
   if(_aiHistory.length>20) _aiHistory=_aiHistory.slice(-20);
   save(aiHistoryKey(),_aiHistory);
+}
+
+function aiFactsKey(){ var m=getCurrentMember(); return m?('pp_ai_facts_'+m.id):'pp_ai_facts_none'; }
+function loadAIFacts(){ _aiFacts=load(aiFactsKey(),[]); }
+function mergeAIFacts(newFacts){
+  if(!newFacts||!newFacts.length) return;
+  newFacts.forEach(function(f){
+    f=f.trim(); if(!f) return;
+    // กันซ้ำแบบง่ายๆ: ถ้ามีข้อความคล้ายกันมากอยู่แล้วไม่เพิ่มซ้ำ
+    var exists=_aiFacts.some(function(old){ return old.trim()===f; });
+    if(!exists) _aiFacts.push(f);
+  });
+  if(_aiFacts.length>60) _aiFacts=_aiFacts.slice(-60); // กันโตไม่รู้จบ
+  save(aiFactsKey(),_aiFacts);
+}
+/** ดึงข้อความมาร์กเกอร์ [MEMORY]: ... ท้ายคำตอบ AI ออกมา แล้วคืนทั้ง facts array และข้อความที่เหลือ (ไม่รวมมาร์กเกอร์) */
+function extractAIMemoryMarker(aiText){
+  var match=aiText.match(/\[MEMORY\]:\s*(.+)\s*$/i);
+  if(!match) return {facts:[], cleanText:aiText};
+  var factsPart=match[1];
+  var cleanText=aiText.slice(0,match.index).trim();
+  var facts=factsPart.split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+  return {facts:facts, cleanText:cleanText||aiText};
 }
 
 function aiApiKeyKey(){ return 'pp_ai_apikey'; }
@@ -5175,6 +5201,7 @@ function ensureAIApiKey(){
 
 function openAIAssistant(){
   loadAIHistory();
+  loadAIFacts();
   document.getElementById('modal-ai-assistant').classList.add('open');
   setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
 }
@@ -5193,11 +5220,13 @@ function startAICamera(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     toast('error','เบราว์เซอร์นี้ไม่รองรับกล้อง'); return;
   }
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false}).then(function(stream){
+  navigator.mediaDevices.getUserMedia({video:{facingMode:_aiCamFacing}, audio:false}).then(function(stream){
     _aiCamStream=stream; _aiVisionOn=true;
     var video=document.getElementById('ai-cam-video');
     video.srcObject=stream; video.style.display='block';
+    video.style.transform = (_aiCamFacing==='user') ? 'scaleX(-1)' : 'none';
     document.getElementById('ai-cam-off').style.display='none';
+    var flipBtn=document.getElementById('ai-cam-flip'); if(flipBtn) flipBtn.style.display='flex';
   }).catch(function(err){
     toast('error','เปิดกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
   });
@@ -5208,6 +5237,24 @@ function stopAICamera(){
   var video=document.getElementById('ai-cam-video');
   if(video){ video.srcObject=null; video.style.display='none'; }
   var off=document.getElementById('ai-cam-off'); if(off) off.style.display='block';
+  var flipBtn=document.getElementById('ai-cam-flip'); if(flipBtn) flipBtn.style.display='none';
+}
+/** สลับกล้องหน้า/หลัง — ปิดสตรีมเดิมแล้วเปิดใหม่ด้วย facingMode ตรงข้าม */
+function flipAICamera(){
+  if(!_aiVisionOn) return;
+  _aiCamFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
+  if(_aiCamStream){ _aiCamStream.getTracks().forEach(function(t){t.stop();}); _aiCamStream=null; }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:_aiCamFacing}, audio:false}).then(function(stream){
+    _aiCamStream=stream;
+    var video=document.getElementById('ai-cam-video');
+    video.srcObject=stream;
+    video.style.transform = (_aiCamFacing==='user') ? 'scaleX(-1)' : 'none';
+  }).catch(function(err){
+    toast('error','สลับกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
+    // ถ้าสลับไม่สำเร็จ ลองกลับไปกล้องเดิม
+    _aiCamFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
+    startAICamera();
+  });
 }
 function captureAIFrameBase64(){
   if(!_aiVisionOn || !_aiCamStream) return null;
@@ -5274,9 +5321,11 @@ function stopAIListening(){
 function processAIUserInput(userText){
   setAIStatus('thinking','กำลังประมวลผล...');
   var imageBase64=captureAIFrameBase64();
-  callClaudeAI(userText,imageBase64).then(function(aiText){
-    saveAIChat(userText,aiText);
-    speakAIText(aiText);
+  callClaudeAI(userText,imageBase64).then(function(rawAiText){
+    var parsed=extractAIMemoryMarker(rawAiText);
+    if(parsed.facts.length) mergeAIFacts(parsed.facts);
+    saveAIChat(userText,parsed.cleanText);
+    speakAIText(parsed.cleanText);
   }).catch(function(err){
     toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
@@ -5306,6 +5355,17 @@ function callClaudeAI(userText,imageBase64){
   currentContent.push({type:'text', text:userText});
   messages.push({role:'user', content:currentContent});
 
+  var factsText = _aiFacts.length
+    ? ('\n\nข้อมูลสำคัญเกี่ยวกับผู้ใช้ที่คุณจำไว้แล้วจากการคุยครั้งก่อนๆ:\n- '+_aiFacts.join('\n- '))
+    : '';
+
+  var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
+    + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง'
+    + factsText
+    + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
+    + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
+    + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
+
   return fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{
@@ -5317,7 +5377,7 @@ function callClaudeAI(userText,imageBase64){
     body:JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:1024,
-      system:'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง',
+      system:systemPrompt,
       messages:messages
     })
   }).then(function(res){
