@@ -5379,18 +5379,24 @@ function registerAIFace(){
 function recognizeAICurrentFace(){
   if(!_aiVisionOn || !_aiCamStream || _aiFacesList.length===0) return Promise.resolve(null);
   if(typeof faceapi==='undefined' || !_faceModelsLoaded) return Promise.resolve(null);
-  var video=document.getElementById('ai-cam-video');
-  return faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-    .withFaceLandmarks().withFaceDescriptor()
-    .then(function(result){
-      if(!result) return null;
-      var best=null, bestDist=0.55; // threshold: ยิ่งน้อยยิ่งมั่นใจว่าใช่คนเดียวกัน
-      _aiFacesList.forEach(function(f){
-        var dist=faceapi.euclideanDistance(result.descriptor, f.descriptor);
-        if(dist<bestDist){ bestDist=dist; best={name:f.name, code:f.code}; }
-      });
-      return best;
-    }).catch(function(){ return null; });
+  try{
+    var video=document.getElementById('ai-cam-video');
+    if(!video || !video.videoWidth) return Promise.resolve(null); // เฟรมยังไม่พร้อม ข้ามไปเลย ไม่บล็อกการคุย
+    return faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks().withFaceDescriptor()
+      .then(function(result){
+        if(!result) return null;
+        var best=null, bestDist=0.55; // threshold: ยิ่งน้อยยิ่งมั่นใจว่าใช่คนเดียวกัน
+        _aiFacesList.forEach(function(f){
+          var dist=faceapi.euclideanDistance(result.descriptor, f.descriptor);
+          if(dist<bestDist){ bestDist=dist; best={name:f.name, code:f.code}; }
+        });
+        return best;
+      }).catch(function(e){ console.warn('[recognizeAICurrentFace]',e); return null; });
+  }catch(e){
+    console.warn('[recognizeAICurrentFace sync error]',e);
+    return Promise.resolve(null); // กันไม่ให้ error ตรงนี้ทำทั้งบทสนทนาค้าง
+  }
 }
 
 function openAIAssistant(){
@@ -5540,7 +5546,14 @@ function stripMarkdownForSpeech(text){
 function processAIUserInput(userText){
   setAIStatus('thinking','กำลังประมวลผล...');
   var imageBase64=captureAIFrameBase64();
-  recognizeAICurrentFace().then(function(recognizedFace){
+
+  var timeoutPromise=new Promise(function(_,reject){
+    setTimeout(function(){ reject(new Error('ใช้เวลานานเกินไป ลองใหม่อีกครั้ง')); }, 25000);
+  });
+
+  var workPromise=Promise.resolve().then(function(){
+    return recognizeAICurrentFace();
+  }).then(function(recognizedFace){
     return callClaudeAI(userText,imageBase64,recognizedFace);
   }).then(function(rawAiText){
     var parsed=parseAIMarkers(rawAiText);
@@ -5548,7 +5561,7 @@ function processAIUserInput(userText){
     var speakableText=stripMarkdownForSpeech(parsed.cleanText);
 
     if(parsed.faceName){
-      registerFaceAuto(parsed.faceName).then(function(code){
+      return registerFaceAuto(parsed.faceName).then(function(code){
         if(code){
           speakableText += ' จดจำใบหน้าคุณ '+parsed.faceName+' รหัส '+code+' เรียบร้อยแล้วนะคะ';
         } else if(!_aiVisionOn){
@@ -5561,7 +5574,9 @@ function processAIUserInput(userText){
       saveAIChat(userText,speakableText);
       speakAIText(speakableText);
     }
-  }).catch(function(err){
+  });
+
+  Promise.race([workPromise, timeoutPromise]).catch(function(err){
     toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
   });
