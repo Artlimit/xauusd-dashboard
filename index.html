@@ -1715,6 +1715,20 @@
   </div>
 
   <!-- AI Assistant Modal (เสียง+กล้อง) -->
+  <!-- API Key Modal (ใช้แทน prompt() เพราะเบราว์เซอร์ในแอปกระเป๋าเงินบางตัวบล็อก prompt/alert/confirm) -->
+  <div class="sheet-overlay" id="modal-ai-apikey" onclick="closeAIApiKeyModalOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🔑 ใส่ Anthropic API Key</div>
+      <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:12px;text-align:center">
+        เก็บไว้ในเครื่องนี้เท่านั้น ใช้เปิดผู้ช่วย AI (สมัครได้ที่ console.anthropic.com)
+      </div>
+      <input class="w-input" id="ai-apikey-input" type="password" placeholder="sk-ant-..." style="margin-bottom:12px;width:100%">
+      <button type="button" class="s-btn" onclick="confirmAIApiKeyModal()">บันทึกและใช้งาน</button>
+      <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:8px" onclick="closeAIApiKeyModal('')">ยกเลิก</button>
+    </div>
+  </div>
+
   <div class="sheet-overlay" id="modal-ai-assistant" onclick="closeAIAssistantOutside(event)">
     <div class="sheet" style="max-height:90vh">
       <div class="sheet-handle"></div>
@@ -1753,6 +1767,9 @@
       </div>
 
       <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="closeAIAssistant()">‹ ปิดหน้าต่าง</button>
+      <div style="text-align:center;margin-top:10px">
+        <a href="javascript:void(0)" style="font-size:.7rem;color:var(--fg-m);text-decoration:underline" onclick="openAIApiKeyModal(function(){})">⚙️ ตั้งค่า/เปลี่ยน API Key</a>
+      </div>
     </div>
   </div>
 
@@ -5252,12 +5269,37 @@ function registerFaceAuto(name){
 
 function aiApiKeyKey(){ return 'pp_ai_apikey'; }
 function getAIApiKey(){ return load(aiApiKeyKey(),''); }
-function ensureAIApiKey(){
+
+/** คืน Promise<string> ของ API key — ถ้ามีอยู่แล้วคืนทันที ถ้าไม่มีจะเปิด modal ให้กรอก
+ * ใช้ modal ของแอปเอง (ไม่ใช่ prompt()) เพราะเบราว์เซอร์ในแอปกระเป๋าเงินบางตัวบล็อก prompt/alert/confirm ไปเลย */
+function ensureAIApiKeyAsync(){
   var key=getAIApiKey();
-  if(key) return key;
-  key=prompt('กรอก Anthropic API Key เพื่อเปิดใช้ผู้ช่วย AI (เก็บไว้ในเครื่องนี้เท่านั้น):');
-  if(key){ save(aiApiKeyKey(),key.trim()); }
-  return key?key.trim():'';
+  if(key) return Promise.resolve(key);
+  return new Promise(function(resolve){
+    openAIApiKeyModal(function(enteredKey){ resolve(enteredKey||''); });
+  });
+}
+
+var _aiApiKeyResolveCb=null;
+function openAIApiKeyModal(onResolve){
+  _aiApiKeyResolveCb=onResolve;
+  var input=document.getElementById('ai-apikey-input');
+  if(input) input.value=getAIApiKey()||'';
+  document.getElementById('modal-ai-apikey').classList.add('open');
+  setTimeout(function(){ if(input) input.focus(); }, 250);
+}
+function closeAIApiKeyModalOutside(e){ if(e.target===e.currentTarget) closeAIApiKeyModal(getAIApiKey()); }
+function closeAIApiKeyModal(resultKey){
+  document.getElementById('modal-ai-apikey').classList.remove('open');
+  var cb=_aiApiKeyResolveCb; _aiApiKeyResolveCb=null;
+  if(cb) cb(resultKey);
+}
+function confirmAIApiKeyModal(){
+  var input=document.getElementById('ai-apikey-input');
+  var key=(input&&input.value||'').trim();
+  if(key) save(aiApiKeyKey(),key);
+  closeAIApiKeyModal(key);
+  if(key) toast('success','บันทึก API Key แล้ว');
 }
 
 // --- จดจำใบหน้า (face-api.js) ---
@@ -5537,66 +5579,67 @@ function speakAIText(text){
 }
 
 function callClaudeAI(userText,imageBase64,recognizedFace){
-  var apiKey=ensureAIApiKey();
-  if(!apiKey) return Promise.reject(new Error('ยังไม่ได้ตั้งค่า API Key'));
+  return ensureAIApiKeyAsync().then(function(apiKey){
+    if(!apiKey) throw new Error('ยังไม่ได้ตั้งค่า API Key');
 
-  var messages=_aiHistory.map(function(m){ return {role:m.role, content:m.text}; });
-  var currentContent=[];
-  if(imageBase64){
-    currentContent.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imageBase64}});
-  }
-  currentContent.push({type:'text', text:userText});
-  messages.push({role:'user', content:currentContent});
+    var messages=_aiHistory.map(function(m){ return {role:m.role, content:m.text}; });
+    var currentContent=[];
+    if(imageBase64){
+      currentContent.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imageBase64}});
+    }
+    currentContent.push({type:'text', text:userText});
+    messages.push({role:'user', content:currentContent});
 
-  var factsText = _aiFacts.length
-    ? ('\n\nข้อมูลสำคัญเกี่ยวกับผู้ใช้ที่คุณจำไว้แล้วจากการคุยครั้งก่อนๆ:\n- '+_aiFacts.join('\n- '))
-    : '';
+    var factsText = _aiFacts.length
+      ? ('\n\nข้อมูลสำคัญเกี่ยวกับผู้ใช้ที่คุณจำไว้แล้วจากการคุยครั้งก่อนๆ:\n- '+_aiFacts.join('\n- '))
+      : '';
 
-  var faceText = recognizedFace
-    ? ('\n\nระบบจดจำใบหน้าตรวจพบว่ากำลังคุยกับ: '+recognizedFace.name+' (รหัส '+recognizedFace.code+') '
-      +'ให้ทักทาย/เอ่ยชื่อนี้อย่างเป็นธรรมชาติในคำตอบ (ไม่ต้องพูดคำว่า "รหัส" ออกเสียง เว้นแต่ผู้ใช้ถามถึง)')
-    : '';
+    var faceText = recognizedFace
+      ? ('\n\nระบบจดจำใบหน้าตรวจพบว่ากำลังคุยกับ: '+recognizedFace.name+' (รหัส '+recognizedFace.code+') '
+        +'ให้ทักทาย/เอ่ยชื่อนี้อย่างเป็นธรรมชาติในคำตอบ (ไม่ต้องพูดคำว่า "รหัส" ออกเสียง เว้นแต่ผู้ใช้ถามถึง)')
+      : '';
 
-  var faceInstructions = recognizedFace
-    ? '\n\n(ตอนนี้จำหน้าคู่สนทนาได้อยู่แล้ว ไม่ต้องขอชื่อหรือใส่ [FACE] อีก เว้นแต่มีคนใหม่ที่ยังไม่รู้จักเข้ามาในกล้อง)'
-    : ('\n\nถ้าผู้ใช้บอกชื่อของตัวเองหรือแนะนำคนที่อยู่ตรงหน้ากล้องตอนนี้ (เช่น "ผมชื่อ art" หรือ "คนนี้ชื่อ art") '
-      + 'และยังไม่เคยรู้จักคนนี้มาก่อน ให้เติมบรรทัดท้ายคำตอบเป็นรูปแบบ [FACE]: ชื่อ (ใส่แค่ชื่อ ไม่ต้องมีคำอื่น) '
-      + 'ระบบจะจดจำใบหน้าและสร้างรหัสให้เองอัตโนมัติ ไม่ต้องถามหารหัสจากผู้ใช้ '
-      + 'ถ้าไม่มีการแนะนำชื่อใหม่ ห้ามใส่บรรทัด [FACE] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง');
+    var faceInstructions = recognizedFace
+      ? '\n\n(ตอนนี้จำหน้าคู่สนทนาได้อยู่แล้ว ไม่ต้องขอชื่อหรือใส่ [FACE] อีก เว้นแต่มีคนใหม่ที่ยังไม่รู้จักเข้ามาในกล้อง)'
+      : ('\n\nถ้าผู้ใช้บอกชื่อของตัวเองหรือแนะนำคนที่อยู่ตรงหน้ากล้องตอนนี้ (เช่น "ผมชื่อ art" หรือ "คนนี้ชื่อ art") '
+        + 'และยังไม่เคยรู้จักคนนี้มาก่อน ให้เติมบรรทัดท้ายคำตอบเป็นรูปแบบ [FACE]: ชื่อ (ใส่แค่ชื่อ ไม่ต้องมีคำอื่น) '
+        + 'ระบบจะจดจำใบหน้าและสร้างรหัสให้เองอัตโนมัติ ไม่ต้องถามหารหัสจากผู้ใช้ '
+        + 'ถ้าไม่มีการแนะนำชื่อใหม่ ห้ามใส่บรรทัด [FACE] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง');
 
-  var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
-    + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง '
-    + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
-    + 'ให้ตอบเป็นข้อความธรรมดาล้วนๆ เหมือนพูดคุยปกติ เพราะคำตอบทั้งหมดจะถูกอ่านออกเสียงให้ฟัง'
-    + factsText
-    + faceText
-    + faceInstructions
-    + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
-    + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
-    + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
+    var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
+      + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง '
+      + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
+      + 'ให้ตอบเป็นข้อความธรรมดาล้วนๆ เหมือนพูดคุยปกติ เพราะคำตอบทั้งหมดจะถูกอ่านออกเสียงให้ฟัง'
+      + factsText
+      + faceText
+      + faceInstructions
+      + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
+      + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
+      + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
 
-  return fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'content-type':'application/json',
-      'x-api-key':apiKey,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({
-      model:'claude-sonnet-4-6',
-      max_tokens:1024,
-      system:systemPrompt,
-      messages:messages
-    })
-  }).then(function(res){
-    if(!res.ok){ return res.text().then(function(t){ throw new Error('API error '+res.status+': '+t); }); }
-    return res.json();
-  }).then(function(data){
-    var content=data.content||[];
-    var out='';
-    content.forEach(function(block){ if(block.type==='text') out+=block.text; });
-    return out.trim();
+    return fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1024,
+        system:systemPrompt,
+        messages:messages
+      })
+    }).then(function(res){
+      if(!res.ok){ return res.text().then(function(t){ throw new Error('API error '+res.status+': '+t); }); }
+      return res.json();
+    }).then(function(data){
+      var content=data.content||[];
+      var out='';
+      content.forEach(function(block){ if(block.type==='text') out+=block.text; });
+      return out.trim();
+    });
   });
 }
 
