@@ -369,6 +369,25 @@
       font-size:.7rem;font-weight:700;color:var(--fg)}
     .agent-link-card:active{transform:scale(.96)}
     .agent-link-icon{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.05rem}
+
+    /* AI Assistant (เสียง+กล้อง) */
+    .ai-cam-wrap{position:relative;width:100%;aspect-ratio:4/3;border-radius:18px;overflow:hidden;
+      background:#000;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
+    .ai-cam-wrap video{width:100%;height:100%;object-fit:cover;display:none}
+    .ai-cam-off{color:var(--fg-m);font-size:.72rem;text-align:center;padding:0 20px}
+    .ai-status-box{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;
+      padding:14px 16px;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .ai-status-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;background:var(--fg-m);transition:transform .3s}
+    .ai-status-dot.pulse{animation:aiPulse 1.1s ease-in-out infinite}
+    @keyframes aiPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}}
+    .ai-status-text{font-size:.85rem;font-weight:700}
+    .ai-mic-btn{width:76px;height:76px;border-radius:50%;border:none;margin:0 auto;display:flex;
+      align-items:center;justify-content:center;cursor:pointer;transition:transform .2s,background .25s;
+      background:linear-gradient(135deg,var(--purple-mid),var(--pink))}
+    .ai-mic-btn:active{transform:scale(.94)}
+    .ai-mic-row{display:flex;justify-content:center;margin-bottom:14px}
+    .ai-vision-toggle{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;
+      background:rgba(0,0,0,.5);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
     .trip-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;cursor:pointer}
     .trip-card-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
     .trip-photo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,rgba(139,95,207,.25),rgba(52,211,153,.25));
@@ -1685,9 +1704,40 @@
     </div>
   </div>
 
-  <button type="button" class="agent-fab" id="agent-fab" onclick="openAgent()" title="เอเจนต์ติดตามราคา" style="display:none">
+  <!-- AI Assistant Modal (เสียง+กล้อง) -->
+  <div class="sheet-overlay" id="modal-ai-assistant" onclick="closeAIAssistantOutside(event)">
+    <div class="sheet" style="max-height:90vh">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        ผู้ช่วย AI
+      </div>
+
+      <div class="ai-cam-wrap" id="ai-cam-wrap">
+        <video id="ai-cam-video" autoplay playsinline muted></video>
+        <div class="ai-cam-off" id="ai-cam-off">📷 กล้องปิดอยู่ — แตะไอคอนตาเพื่อเปิด<br>(เป็นเหมือนดวงตาของผู้ช่วย)</div>
+        <button type="button" class="ai-vision-toggle" id="ai-vision-toggle" onclick="toggleAIVision()" title="เปิด/ปิดกล้อง">👁️</button>
+      </div>
+      <canvas id="ai-cam-canvas" style="display:none"></canvas>
+
+      <div class="ai-status-box">
+        <div class="ai-status-dot" id="ai-status-dot"></div>
+        <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม</div>
+      </div>
+
+      <div class="ai-mic-row">
+        <button type="button" class="ai-mic-btn" id="ai-mic-btn" onclick="onAIMicClick()">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        </button>
+      </div>
+
+      <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="closeAIAssistant()">‹ ปิดหน้าต่าง</button>
+    </div>
+  </div>
+
+  <button type="button" class="agent-fab" id="agent-fab" onclick="openAIAssistant()" title="ผู้ช่วย AI" style="display:none">
     <span class="badge" id="agent-fab-badge">!</span>
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
   </button>
 
   <nav class="bot-nav" id="bot-nav" style="display:none">
@@ -5092,6 +5142,193 @@ function maybeAskAgentNotifyPermission(){
   if('Notification' in window && Notification.permission==='default'){
     Notification.requestPermission();
   }
+}
+
+// ============================================================
+// ผู้ช่วย AI (เสียง+กล้อง) — กดปุ่มเขียวเพื่อคุยกับ AI ที่มองเห็นผ่านกล้องได้
+// กล้อง = ดวงตา, ไมค์ = ปาก ของผู้ช่วย
+// ============================================================
+var aiAgentState='idle'; // idle | listening | thinking | speaking
+var _aiCamStream=null;
+var _aiRecognition=null;
+var _aiVisionOn=false;
+var _aiHistory=[]; // [{role,text}]
+
+function aiHistoryKey(){ var m=getCurrentMember(); return m?('pp_ai_history_'+m.id):'pp_ai_history_none'; }
+function loadAIHistory(){ _aiHistory=load(aiHistoryKey(),[]); }
+function saveAIChat(userText,aiText){
+  _aiHistory.push({role:'user',text:userText});
+  _aiHistory.push({role:'assistant',text:aiText});
+  if(_aiHistory.length>20) _aiHistory=_aiHistory.slice(-20);
+  save(aiHistoryKey(),_aiHistory);
+}
+
+function aiApiKeyKey(){ return 'pp_ai_apikey'; }
+function getAIApiKey(){ return load(aiApiKeyKey(),''); }
+function ensureAIApiKey(){
+  var key=getAIApiKey();
+  if(key) return key;
+  key=prompt('กรอก Anthropic API Key เพื่อเปิดใช้ผู้ช่วย AI (เก็บไว้ในเครื่องนี้เท่านั้น):');
+  if(key){ save(aiApiKeyKey(),key.trim()); }
+  return key?key.trim():'';
+}
+
+function openAIAssistant(){
+  loadAIHistory();
+  document.getElementById('modal-ai-assistant').classList.add('open');
+  setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+}
+function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
+function closeAIAssistant(){
+  document.getElementById('modal-ai-assistant').classList.remove('open');
+  stopAIListening();
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  stopAICamera();
+}
+
+function toggleAIVision(){
+  if(_aiVisionOn){ stopAICamera(); } else { startAICamera(); }
+}
+function startAICamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    toast('error','เบราว์เซอร์นี้ไม่รองรับกล้อง'); return;
+  }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false}).then(function(stream){
+    _aiCamStream=stream; _aiVisionOn=true;
+    var video=document.getElementById('ai-cam-video');
+    video.srcObject=stream; video.style.display='block';
+    document.getElementById('ai-cam-off').style.display='none';
+  }).catch(function(err){
+    toast('error','เปิดกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
+  });
+}
+function stopAICamera(){
+  if(_aiCamStream){ _aiCamStream.getTracks().forEach(function(t){t.stop();}); _aiCamStream=null; }
+  _aiVisionOn=false;
+  var video=document.getElementById('ai-cam-video');
+  if(video){ video.srcObject=null; video.style.display='none'; }
+  var off=document.getElementById('ai-cam-off'); if(off) off.style.display='block';
+}
+function captureAIFrameBase64(){
+  if(!_aiVisionOn || !_aiCamStream) return null;
+  var video=document.getElementById('ai-cam-video');
+  var canvas=document.getElementById('ai-cam-canvas');
+  if(!video.videoWidth) return null;
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  var ctx=canvas.getContext('2d');
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL('image/jpeg',0.8).split(',')[1]; // ตัด header data:image/jpeg;base64, ออก
+}
+
+function setAIStatus(stateName,text){
+  aiAgentState=stateName;
+  var dot=document.getElementById('ai-status-dot');
+  var txt=document.getElementById('ai-status-text');
+  if(!dot||!txt) return;
+  txt.textContent=text;
+  var colors={idle:'var(--fg-m)',listening:'var(--red)',thinking:'var(--yellow)',speaking:'var(--green)'};
+  dot.style.background=colors[stateName]||'var(--fg-m)';
+  dot.classList.toggle('pulse', stateName!=='idle');
+  var micBtn=document.getElementById('ai-mic-btn');
+  var bg={idle:'linear-gradient(135deg,var(--purple-mid),var(--pink))',listening:'#ff3b30',
+    thinking:'#ffcc00',speaking:'#34c759'};
+  if(micBtn) micBtn.style.background=bg[stateName]||bg.idle;
+}
+
+function onAIMicClick(){
+  if(aiAgentState==='listening'){
+    stopAIListening();
+    setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+    return;
+  }
+  if(aiAgentState==='thinking' || aiAgentState==='speaking'){
+    if(window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+  startAIListening();
+}
+
+function startAIListening(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  setAIStatus('listening','กำลังฟัง...');
+  _aiRecognition=new SR();
+  _aiRecognition.lang='th-TH';
+  _aiRecognition.interimResults=false;
+  _aiRecognition.maxAlternatives=1;
+  _aiRecognition.onresult=function(event){
+    var text=event.results[0][0].transcript;
+    processAIUserInput(text);
+  };
+  _aiRecognition.onerror=function(){
+    setAIStatus('idle','ฟังไม่รู้เรื่อง ลองแตะไมค์อีกครั้ง');
+  };
+  _aiRecognition.onend=function(){
+    if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+  };
+  try{ _aiRecognition.start(); }catch(e){ setAIStatus('idle','เริ่มฟังไม่สำเร็จ'); }
+}
+function stopAIListening(){
+  if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
+}
+
+function processAIUserInput(userText){
+  setAIStatus('thinking','กำลังประมวลผล...');
+  var imageBase64=captureAIFrameBase64();
+  callClaudeAI(userText,imageBase64).then(function(aiText){
+    saveAIChat(userText,aiText);
+    speakAIText(aiText);
+  }).catch(function(err){
+    toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
+    setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
+  });
+}
+
+function speakAIText(text){
+  setAIStatus('speaking','กำลังพูด...');
+  if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); return; }
+  var utter=new SpeechSynthesisUtterance(text);
+  utter.lang='th-TH';
+  utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); };
+  utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); };
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
+}
+
+function callClaudeAI(userText,imageBase64){
+  var apiKey=ensureAIApiKey();
+  if(!apiKey) return Promise.reject(new Error('ยังไม่ได้ตั้งค่า API Key'));
+
+  var messages=_aiHistory.map(function(m){ return {role:m.role, content:m.text}; });
+  var currentContent=[];
+  if(imageBase64){
+    currentContent.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imageBase64}});
+  }
+  currentContent.push({type:'text', text:userText});
+  messages.push({role:'user', content:currentContent});
+
+  return fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:1024,
+      system:'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง',
+      messages:messages
+    })
+  }).then(function(res){
+    if(!res.ok){ return res.text().then(function(t){ throw new Error('API error '+res.status+': '+t); }); }
+    return res.json();
+  }).then(function(data){
+    var content=data.content||[];
+    var out='';
+    content.forEach(function(block){ if(block.type==='text') out+=block.text; });
+    return out.trim();
+  });
 }
 
 // ============================================================
