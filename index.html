@@ -5199,14 +5199,55 @@ function mergeAIFacts(newFacts){
   if(_aiFacts.length>60) _aiFacts=_aiFacts.slice(-60); // กันโตไม่รู้จบ
   save(aiFactsKey(),_aiFacts);
 }
-/** ดึงข้อความมาร์กเกอร์ [MEMORY]: ... ท้ายคำตอบ AI ออกมา แล้วคืนทั้ง facts array และข้อความที่เหลือ (ไม่รวมมาร์กเกอร์) */
-function extractAIMemoryMarker(aiText){
-  var match=aiText.match(/\[MEMORY\]:\s*(.+)\s*$/i);
-  if(!match) return {facts:[], cleanText:aiText};
-  var factsPart=match[1];
-  var cleanText=aiText.slice(0,match.index).trim();
-  var facts=factsPart.split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
-  return {facts:facts, cleanText:cleanText||aiText};
+/** ดึงบรรทัดมาร์กเกอร์ [MEMORY]: ... และ [FACE]: ... ออกจากคำตอบ AI (มองหาได้ทุกบรรทัด ไม่ใช่แค่บรรทัดสุดท้าย)
+ * คืน {cleanText, facts:[...], faceName: string|null} — บรรทัดมาร์กเกอร์จะไม่ถูกพูดออกเสียง/บันทึกลงประวัติ */
+function parseAIMarkers(aiText){
+  var facts=[]; var faceName=null;
+  var lines=aiText.split('\n').filter(function(line){
+    var mMemory=line.match(/^\s*\[MEMORY\]:\s*(.+)\s*$/i);
+    if(mMemory){
+      facts=facts.concat(mMemory[1].split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>0;}));
+      return false;
+    }
+    var mFace=line.match(/^\s*\[FACE\]:\s*(.+)\s*$/i);
+    if(mFace){
+      faceName=mFace[1].trim();
+      return false;
+    }
+    return true;
+  });
+  var cleanText=lines.join('\n').trim();
+  return {facts:facts, faceName:faceName, cleanText:cleanText||aiText};
+}
+
+/** สร้างรหัสอัตโนมัติจากชื่อ เช่น "art" -> "art123" กันชนกับรหัสที่มีอยู่แล้ว */
+function generateFaceCode(name){
+  var base=(name||'user').toString().trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9ก-๙]/g,'');
+  if(!base) base='user';
+  var code, tries=0;
+  do{
+    code=base+Math.floor(100+Math.random()*900);
+    tries++;
+  } while(_aiFacesList.some(function(f){return f.code===code;}) && tries<10);
+  return code;
+}
+
+/** จดจำใบหน้าปัจจุบันในกล้องแบบอัตโนมัติ ตั้งชื่อตามที่ AI ได้ยิน + สร้างรหัสเอง คืนรหัสที่สร้าง หรือ null ถ้าทำไม่ได้ */
+function registerFaceAuto(name){
+  if(!_aiVisionOn || !_aiCamStream) return Promise.resolve(null);
+  if(typeof faceapi==='undefined') return Promise.resolve(null);
+  return loadFaceApiModels().then(function(){
+    var video=document.getElementById('ai-cam-video');
+    return faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks().withFaceDescriptor();
+  }).then(function(result){
+    if(!result) return null;
+    var code=generateFaceCode(name);
+    _aiFacesList.push({name:name, code:code, descriptor:Array.from(result.descriptor)});
+    saveAIFacesList();
+    renderAIFaceList();
+    return code;
+  }).catch(function(){ return null; });
 }
 
 function aiApiKeyKey(){ return 'pp_ai_apikey'; }
@@ -5420,8 +5461,18 @@ function startAIListening(){
     var text=event.results[0][0].transcript;
     processAIUserInput(text);
   };
-  _aiRecognition.onerror=function(){
-    setAIStatus('idle','ฟังไม่รู้เรื่อง ลองแตะไมค์อีกครั้ง');
+  _aiRecognition.onerror=function(event){
+    var reason=event&&event.error?event.error:'ไม่ทราบสาเหตุ';
+    console.warn('[AI mic error]', reason, event);
+    var msgMap={
+      'not-allowed':'ไม่ได้รับสิทธิ์ไมค์ — เช็คการอนุญาตไมค์ของเบราว์เซอร์ให้เว็บนี้',
+      'audio-capture':'หาไมค์ไม่เจอ หรือไมค์ถูกแอปอื่นใช้งานอยู่',
+      'no-speech':'ไม่ได้ยินเสียงพูด ลองพูดใหม่อีกครั้ง',
+      'network':'เน็ตหลุดระหว่างฟังเสียง',
+      'aborted':'การฟังถูกยกเลิกกลางคัน'
+    };
+    setAIStatus('idle', (msgMap[reason]||('ฟังไม่สำเร็จ ('+reason+')')) + ' — แตะไมค์เพื่อลองใหม่');
+    toast('error','ผู้ช่วย AI ฟังไม่สำเร็จ: '+reason);
   };
   _aiRecognition.onend=function(){
     if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
@@ -5450,11 +5501,24 @@ function processAIUserInput(userText){
   recognizeAICurrentFace().then(function(recognizedFace){
     return callClaudeAI(userText,imageBase64,recognizedFace);
   }).then(function(rawAiText){
-    var parsed=extractAIMemoryMarker(rawAiText);
+    var parsed=parseAIMarkers(rawAiText);
     if(parsed.facts.length) mergeAIFacts(parsed.facts);
     var speakableText=stripMarkdownForSpeech(parsed.cleanText);
-    saveAIChat(userText,speakableText);
-    speakAIText(speakableText);
+
+    if(parsed.faceName){
+      registerFaceAuto(parsed.faceName).then(function(code){
+        if(code){
+          speakableText += ' จดจำใบหน้าคุณ '+parsed.faceName+' รหัส '+code+' เรียบร้อยแล้วนะคะ';
+        } else if(!_aiVisionOn){
+          speakableText += ' แต่ยังเปิดกล้องไม่ได้อยู่ เปิดกล้องแล้วบอกชื่ออีกทีนะคะ ถึงจะจดจำใบหน้าได้';
+        }
+        saveAIChat(userText,speakableText);
+        speakAIText(speakableText);
+      });
+    } else {
+      saveAIChat(userText,speakableText);
+      speakAIText(speakableText);
+    }
   }).catch(function(err){
     toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
@@ -5493,12 +5557,20 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
       +'ให้ทักทาย/เอ่ยชื่อนี้อย่างเป็นธรรมชาติในคำตอบ (ไม่ต้องพูดคำว่า "รหัส" ออกเสียง เว้นแต่ผู้ใช้ถามถึง)')
     : '';
 
+  var faceInstructions = recognizedFace
+    ? '\n\n(ตอนนี้จำหน้าคู่สนทนาได้อยู่แล้ว ไม่ต้องขอชื่อหรือใส่ [FACE] อีก เว้นแต่มีคนใหม่ที่ยังไม่รู้จักเข้ามาในกล้อง)'
+    : ('\n\nถ้าผู้ใช้บอกชื่อของตัวเองหรือแนะนำคนที่อยู่ตรงหน้ากล้องตอนนี้ (เช่น "ผมชื่อ art" หรือ "คนนี้ชื่อ art") '
+      + 'และยังไม่เคยรู้จักคนนี้มาก่อน ให้เติมบรรทัดท้ายคำตอบเป็นรูปแบบ [FACE]: ชื่อ (ใส่แค่ชื่อ ไม่ต้องมีคำอื่น) '
+      + 'ระบบจะจดจำใบหน้าและสร้างรหัสให้เองอัตโนมัติ ไม่ต้องถามหารหัสจากผู้ใช้ '
+      + 'ถ้าไม่มีการแนะนำชื่อใหม่ ห้ามใส่บรรทัด [FACE] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง');
+
   var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
     + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง '
     + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
     + 'ให้ตอบเป็นข้อความธรรมดาล้วนๆ เหมือนพูดคุยปกติ เพราะคำตอบทั้งหมดจะถูกอ่านออกเสียงให้ฟัง'
     + factsText
     + faceText
+    + faceInstructions
     + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
     + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
     + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
