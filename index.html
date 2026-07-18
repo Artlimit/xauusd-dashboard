@@ -14,6 +14,8 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- face-api.js (ใช้สำหรับผู้ช่วย AI จดจำใบหน้า) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/dist/face-api.js"></script>
   <!-- WalletConnect AppKit (Reown) — ไม่ต้อง bundler -->
   <script type="module">
     import { createAppKit } from 'https://esm.run/@reown/appkit@1.6.8';
@@ -388,6 +390,14 @@
     .ai-mic-row{display:flex;justify-content:center;margin-bottom:14px}
     .ai-vision-toggle{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;
       background:rgba(0,0,0,.5);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
+    .ai-face-box{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-bottom:14px}
+    .ai-face-row{display:flex;gap:8px;margin-bottom:8px}
+    .ai-face-row input{flex:1;min-width:0}
+    .ai-face-item{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border)}
+    .ai-face-item:last-child{border-bottom:none}
+    .ai-face-name{font-size:.8rem;font-weight:700;flex:1}
+    .ai-face-code{font-size:.65rem;color:var(--fg-m)}
+    .ai-face-del{color:var(--red);font-size:.68rem;background:none;border:none;padding:6px;cursor:pointer}
     .trip-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;cursor:pointer}
     .trip-card-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
     .trip-photo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,rgba(139,95,207,.25),rgba(52,211,153,.25));
@@ -1720,6 +1730,16 @@
         <button type="button" class="ai-vision-toggle" id="ai-cam-flip" onclick="flipAICamera()" title="สลับกล้องหน้า/หลัง" style="right:52px;display:none">🔄</button>
       </div>
       <canvas id="ai-cam-canvas" style="display:none"></canvas>
+
+      <div class="ai-face-box">
+        <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:8px">📸 จดจำใบหน้า — เปิดกล้องแล้วให้คนนั้นอยู่ในเฟรม จากนั้นกรอกชื่อ+รหัสแล้วกดจดจำ</div>
+        <div class="ai-face-row">
+          <input class="w-input" id="ai-face-name" type="text" placeholder="ชื่อ เช่น คุณอาท">
+          <input class="w-input" id="ai-face-code" type="text" placeholder="รหัส เช่น v223">
+        </div>
+        <button type="button" class="s-btn" onclick="registerAIFace()">📸 ถ่ายและจดจำใบหน้านี้</button>
+        <div id="ai-face-list" style="margin-top:8px"></div>
+      </div>
 
       <div class="ai-status-box">
         <div class="ai-status-dot" id="ai-status-dot"></div>
@@ -5199,9 +5219,102 @@ function ensureAIApiKey(){
   return key?key.trim():'';
 }
 
+// --- จดจำใบหน้า (face-api.js) ---
+var FACE_MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/model';
+var _faceModelsLoaded=false;
+var _faceModelsLoadingPromise=null;
+var _aiFacesList=[]; // [{name, code, descriptor:[...128 ตัวเลข]}]
+
+function loadFaceApiModels(){
+  if(_faceModelsLoaded) return Promise.resolve();
+  if(_faceModelsLoadingPromise) return _faceModelsLoadingPromise;
+  if(typeof faceapi==='undefined'){
+    console.warn('face-api.js ยังโหลดไม่เสร็จหรือโหลดไม่สำเร็จ');
+    return Promise.resolve();
+  }
+  _faceModelsLoadingPromise=Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+  ]).then(function(){
+    _faceModelsLoaded=true;
+  }).catch(function(e){
+    console.warn('โหลดโมเดลจดจำใบหน้าไม่สำเร็จ',e);
+    _faceModelsLoadingPromise=null; // เผื่อลองใหม่ครั้งหน้า
+  });
+  return _faceModelsLoadingPromise;
+}
+
+function aiFacesKey(){ var m=getCurrentMember(); return m?('pp_ai_faces_'+m.id):'pp_ai_faces_none'; }
+function loadAIFacesList(){ _aiFacesList=load(aiFacesKey(),[]); }
+function saveAIFacesList(){ save(aiFacesKey(),_aiFacesList); }
+
+function renderAIFaceList(){
+  var box=document.getElementById('ai-face-list'); if(!box) return;
+  if(_aiFacesList.length===0){ box.innerHTML=''; return; }
+  box.innerHTML=_aiFacesList.map(function(f,idx){
+    return '<div class="ai-face-item"><div class="ai-face-name">'+f.name+'</div>'+
+      '<div class="ai-face-code">รหัส '+f.code+'</div>'+
+      '<button type="button" class="ai-face-del" onclick="deleteAIFace('+idx+')">ลบ</button></div>';
+  }).join('');
+}
+
+function deleteAIFace(idx){
+  _aiFacesList.splice(idx,1);
+  saveAIFacesList();
+  renderAIFaceList();
+  toast('info','ลืมใบหน้านี้แล้ว');
+}
+
+function registerAIFace(){
+  var nameInput=document.getElementById('ai-face-name');
+  var codeInput=document.getElementById('ai-face-code');
+  var name=(nameInput.value||'').trim();
+  var code=(codeInput.value||'').trim();
+  if(!name){ toast('error','กรุณากรอกชื่อก่อน'); return; }
+  if(!_aiVisionOn || !_aiCamStream){ toast('error','กรุณาเปิดกล้อง (แตะไอคอนตา) ก่อนจดจำใบหน้า'); return; }
+  if(typeof faceapi==='undefined'){ toast('error','ไลบรารีจดจำใบหน้าโหลดไม่สำเร็จ ลองเช็คอินเทอร์เน็ต'); return; }
+
+  toast('info','กำลังโหลดโมเดล/วิเคราะห์ใบหน้า...');
+  loadFaceApiModels().then(function(){
+    var video=document.getElementById('ai-cam-video');
+    return faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks().withFaceDescriptor();
+  }).then(function(result){
+    if(!result){ toast('error','ไม่พบใบหน้าในกล้อง ลองขยับให้หน้าอยู่กลางเฟรม'); return; }
+    _aiFacesList.push({name:name, code:code, descriptor:Array.from(result.descriptor)});
+    saveAIFacesList();
+    renderAIFaceList();
+    nameInput.value=''; codeInput.value='';
+    toast('success','จดจำใบหน้า '+name+' เรียบร้อยแล้ว');
+  }).catch(function(err){
+    toast('error','จดจำใบหน้าไม่สำเร็จ: '+(err&&err.message?err.message:err));
+  });
+}
+
+/** เช็คใบหน้าปัจจุบันในกล้อง เทียบกับที่จำไว้ คืน {name,code} ถ้าตรง หรือ null ถ้าไม่รู้จัก/ตรวจไม่ได้ */
+function recognizeAICurrentFace(){
+  if(!_aiVisionOn || !_aiCamStream || _aiFacesList.length===0) return Promise.resolve(null);
+  if(typeof faceapi==='undefined' || !_faceModelsLoaded) return Promise.resolve(null);
+  var video=document.getElementById('ai-cam-video');
+  return faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+    .withFaceLandmarks().withFaceDescriptor()
+    .then(function(result){
+      if(!result) return null;
+      var best=null, bestDist=0.55; // threshold: ยิ่งน้อยยิ่งมั่นใจว่าใช่คนเดียวกัน
+      _aiFacesList.forEach(function(f){
+        var dist=faceapi.euclideanDistance(result.descriptor, f.descriptor);
+        if(dist<bestDist){ bestDist=dist; best={name:f.name, code:f.code}; }
+      });
+      return best;
+    }).catch(function(){ return null; });
+}
+
 function openAIAssistant(){
   loadAIHistory();
   loadAIFacts();
+  loadAIFacesList();
+  renderAIFaceList();
   document.getElementById('modal-ai-assistant').classList.add('open');
   setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
 }
@@ -5227,6 +5340,7 @@ function startAICamera(){
     video.style.transform = (_aiCamFacing==='user') ? 'scaleX(-1)' : 'none';
     document.getElementById('ai-cam-off').style.display='none';
     var flipBtn=document.getElementById('ai-cam-flip'); if(flipBtn) flipBtn.style.display='flex';
+    loadFaceApiModels(); // เริ่มโหลดล่วงหน้าตั้งแต่เปิดกล้อง จะได้พร้อมใช้ตอนคุยจริง
   }).catch(function(err){
     toast('error','เปิดกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
   });
@@ -5318,14 +5432,29 @@ function stopAIListening(){
   if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
 }
 
+/** ตัดสัญลักษณ์ markdown ทิ้ง เผื่อ AI หลุดใส่มา (**หนา**, *เอียง*, # หัวข้อ, - บูลเลต, `โค้ด`) จะได้ไม่พูด "ดอกจัน"/"ชาร์ป" ออกมา */
+function stripMarkdownForSpeech(text){
+  return text
+    .replace(/\*\*(.+?)\*\*/g,'$1')   // **หนา** -> หนา
+    .replace(/\*(.+?)\*/g,'$1')       // *เอียง* -> เอียง
+    .replace(/`{1,3}(.+?)`{1,3}/g,'$1') // `โค้ด` -> โค้ด
+    .replace(/^#{1,6}\s*/gm,'')       // # หัวข้อ -> หัวข้อ
+    .replace(/^[-•]\s+/gm,'')         // - บูลเลต -> (ตัดทิ้ง)
+    .replace(/\*/g,'')                // เก็บกวาดดอกจันเดี่ยวที่หลงเหลือ
+    .trim();
+}
+
 function processAIUserInput(userText){
   setAIStatus('thinking','กำลังประมวลผล...');
   var imageBase64=captureAIFrameBase64();
-  callClaudeAI(userText,imageBase64).then(function(rawAiText){
+  recognizeAICurrentFace().then(function(recognizedFace){
+    return callClaudeAI(userText,imageBase64,recognizedFace);
+  }).then(function(rawAiText){
     var parsed=extractAIMemoryMarker(rawAiText);
     if(parsed.facts.length) mergeAIFacts(parsed.facts);
-    saveAIChat(userText,parsed.cleanText);
-    speakAIText(parsed.cleanText);
+    var speakableText=stripMarkdownForSpeech(parsed.cleanText);
+    saveAIChat(userText,speakableText);
+    speakAIText(speakableText);
   }).catch(function(err){
     toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
@@ -5343,7 +5472,7 @@ function speakAIText(text){
   window.speechSynthesis.speak(utter);
 }
 
-function callClaudeAI(userText,imageBase64){
+function callClaudeAI(userText,imageBase64,recognizedFace){
   var apiKey=ensureAIApiKey();
   if(!apiKey) return Promise.reject(new Error('ยังไม่ได้ตั้งค่า API Key'));
 
@@ -5359,9 +5488,17 @@ function callClaudeAI(userText,imageBase64){
     ? ('\n\nข้อมูลสำคัญเกี่ยวกับผู้ใช้ที่คุณจำไว้แล้วจากการคุยครั้งก่อนๆ:\n- '+_aiFacts.join('\n- '))
     : '';
 
+  var faceText = recognizedFace
+    ? ('\n\nระบบจดจำใบหน้าตรวจพบว่ากำลังคุยกับ: '+recognizedFace.name+' (รหัส '+recognizedFace.code+') '
+      +'ให้ทักทาย/เอ่ยชื่อนี้อย่างเป็นธรรมชาติในคำตอบ (ไม่ต้องพูดคำว่า "รหัส" ออกเสียง เว้นแต่ผู้ใช้ถามถึง)')
+    : '';
+
   var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
-    + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง'
+    + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง '
+    + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
+    + 'ให้ตอบเป็นข้อความธรรมดาล้วนๆ เหมือนพูดคุยปกติ เพราะคำตอบทั้งหมดจะถูกอ่านออกเสียงให้ฟัง'
     + factsText
+    + faceText
     + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
     + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
     + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
