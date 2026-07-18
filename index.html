@@ -5445,29 +5445,39 @@ function stopAICamera(){
 /** สลับกล้องหน้า/หลัง — ปิดสตรีมเดิมแล้วเปิดใหม่ด้วย facingMode ตรงข้าม */
 function flipAICamera(){
   if(!_aiVisionOn) return;
-  _aiCamFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
+  var newFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
   if(_aiCamStream){ _aiCamStream.getTracks().forEach(function(t){t.stop();}); _aiCamStream=null; }
-  navigator.mediaDevices.getUserMedia({video:{facingMode:_aiCamFacing}, audio:false}).then(function(stream){
-    _aiCamStream=stream;
-    var video=document.getElementById('ai-cam-video');
-    video.srcObject=stream;
-    video.style.transform = (_aiCamFacing==='user') ? 'scaleX(-1)' : 'none';
-  }).catch(function(err){
-    toast('error','สลับกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
-    // ถ้าสลับไม่สำเร็จ ลองกลับไปกล้องเดิม
-    _aiCamFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
-    startAICamera();
-  });
+  var video=document.getElementById('ai-cam-video');
+  if(video) video.srcObject=null;
+
+  // มือถือหลายรุ่นต้องพักสักครู่ก่อนเปิดกล้องใหม่ ไม่งั้นจะ error "Could not start video source"
+  setTimeout(function(){
+    navigator.mediaDevices.getUserMedia({video:{facingMode:newFacing}, audio:false}).then(function(stream){
+      _aiCamFacing=newFacing;
+      _aiCamStream=stream;
+      video.srcObject=stream;
+      video.style.transform = (newFacing==='user') ? 'scaleX(-1)' : 'none';
+    }).catch(function(err){
+      toast('error','สลับกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
+      // สลับไม่สำเร็จ กลับไปเปิดกล้องเดิมแทน (ไม่เปลี่ยน _aiCamFacing)
+      startAICamera();
+    });
+  }, 300);
 }
 function captureAIFrameBase64(){
   if(!_aiVisionOn || !_aiCamStream) return null;
-  var video=document.getElementById('ai-cam-video');
-  var canvas=document.getElementById('ai-cam-canvas');
-  if(!video.videoWidth) return null;
-  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
-  var ctx=canvas.getContext('2d');
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  return canvas.toDataURL('image/jpeg',0.8).split(',')[1]; // ตัด header data:image/jpeg;base64, ออก
+  try{
+    var video=document.getElementById('ai-cam-video');
+    var canvas=document.getElementById('ai-cam-canvas');
+    if(!video || !video.videoWidth) return null;
+    canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    return canvas.toDataURL('image/jpeg',0.8).split(',')[1]; // ตัด header data:image/jpeg;base64, ออก
+  }catch(e){
+    console.warn('[captureAIFrameBase64]',e);
+    return null; // จับภาพไม่ได้ก็ไม่เป็นไร คุยกันด้วยเสียงต่อได้ปกติ
+  }
 }
 
 function setAIStatus(stateName,text){
@@ -5506,8 +5516,14 @@ function startAIListening(){
   _aiRecognition.interimResults=false;
   _aiRecognition.maxAlternatives=1;
   _aiRecognition.onresult=function(event){
-    var text=event.results[0][0].transcript;
-    processAIUserInput(text);
+    try{
+      var text=event.results[0][0].transcript;
+      processAIUserInput(text);
+    }catch(e){
+      console.warn('[onresult error]',e);
+      toast('error','เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
+      setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
+    }
   };
   _aiRecognition.onerror=function(event){
     var reason=event&&event.error?event.error:'ไม่ทราบสาเหตุ';
