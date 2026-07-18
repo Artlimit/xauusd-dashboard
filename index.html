@@ -5267,6 +5267,41 @@ function registerFaceAuto(name){
   }).catch(function(){ return null; });
 }
 
+/** อ่านข้อมูลกระเป๋าเงิน/ยอดคงเหลือที่แอปแสดงอยู่บนจอ "สดๆ" (อ่านอย่างเดียว ไม่ยุ่งกับตรรกะคำนวณเดิม)
+ * เอาไปแนบให้ AI ตอบคำถามเรื่องยอดเงินได้ถูกต้องตามจริง ไม่ต้องเดา */
+function getAIWalletContextText(){
+  try{
+    var lines=[];
+    var member=(typeof getCurrentMember==='function') ? getCurrentMember() : null;
+    if(member && member.name) lines.push('ผู้ใช้ที่ล็อกอินอยู่ตอนนี้ชื่อ: '+member.name);
+
+    if(typeof connectedWalletAddress!=='undefined' && connectedWalletAddress){
+      lines.push('กระเป๋าคริปโตที่เชื่อมอยู่: '+connectedWalletAddress.slice(0,6)+'...'+connectedWalletAddress.slice(-4));
+    }
+
+    var curEl=document.getElementById('wc-cur');
+    var balEl=document.getElementById('balanceDisplay');
+    if(curEl && balEl && balEl.textContent.trim()){
+      lines.push('ยอดเงินคงเหลือในกระเป๋า: '+curEl.textContent+balEl.textContent);
+    }
+
+    var thbEl=document.getElementById('wc-thb-equiv');
+    if(thbEl && thbEl.textContent.trim() && thbEl.style.display!=='none'){
+      lines.push('เทียบเท่า: '+thbEl.textContent.trim());
+    }
+
+    var pfEl=document.getElementById('wc-portfolio');
+    if(pfEl && pfEl.textContent.trim()){
+      lines.push('ข้อมูลเงินลงทุน: '+pfEl.textContent.replace(/\s+/g,' ').trim());
+    }
+
+    return lines.join('\n');
+  }catch(e){
+    console.warn('[getAIWalletContextText]',e);
+    return ''; // อ่านไม่ได้ก็ไม่เป็นไร แค่ AI จะไม่รู้ข้อมูลกระเป๋ารอบนี้ ไม่กระทบส่วนอื่น
+  }
+}
+
 function aiApiKeyKey(){ return 'pp_ai_apikey'; }
 function getAIApiKey(){ return load(aiApiKeyKey(),''); }
 
@@ -5399,13 +5434,33 @@ function recognizeAICurrentFace(){
   }
 }
 
+/** เดาว่ากำลังเปิดอยู่ในเบราว์เซอร์ในตัวแอปกระเป๋าเงินหรือไม่ (ตรวจแบบ best-effort เท่านั้น ไม่ 100%)
+ * เบราว์เซอร์พวกนี้มักบล็อกกล้อง/ไมค์/prompt และบางทีบล็อก request ไปโดเมนภายนอกด้วย */
+function isLikelyWalletInAppBrowser(){
+  try{
+    var ua=navigator.userAgent||'';
+    var patterns=[/MetaMask/i,/Trust/i,/TokenPocket/i,/imToken/i,/Bitget/i,/CoinbaseWallet/i,/OKApp/i,/SafePal/i,/BitKeep/i,/Rainbow/i,/HuobiWallet/i,/BinanceChain/i];
+    if(patterns.some(function(p){return p.test(ua);})) return true;
+    // เผื่อ UA ไม่ระบุชัด เช็คจาก provider ที่ inject เข้ามาด้วย (ไม่ชัด 100% แต่ช่วยดักเพิ่ม)
+    if(window.ethereum && (window.ethereum.isMetaMask || window.ethereum.isTrust || window.ethereum.isBitKeep || window.ethereum.isCoinbaseWallet || window.ethereum.isTokenPocket)){
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
 function openAIAssistant(){
   loadAIHistory();
   loadAIFacts();
   loadAIFacesList();
   renderAIFaceList();
   document.getElementById('modal-ai-assistant').classList.add('open');
-  setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+  if(isLikelyWalletInAppBrowser()){
+    setAIStatus('idle','⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋า — กล้อง/ไมค์อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome/Safari แทน');
+    toast('error','เบราว์เซอร์นี้อาจบล็อกกล้อง/ไมค์ — แนะนำเปิดผ่าน Chrome หรือ Safari');
+  } else {
+    setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+  }
 }
 function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
 function closeAIAssistant(){
@@ -5625,6 +5680,13 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
       ? ('\n\nข้อมูลสำคัญเกี่ยวกับผู้ใช้ที่คุณจำไว้แล้วจากการคุยครั้งก่อนๆ:\n- '+_aiFacts.join('\n- '))
       : '';
 
+    var walletInfo = getAIWalletContextText();
+    var walletText = walletInfo
+      ? ('\n\nข้อมูลกระเป๋าเงิน/ยอดคงเหลือปัจจุบันของผู้ใช้ (ดึงจากหน้าจอแอปสดๆ ตอนนี้):\n'+walletInfo
+        +'\nถ้าผู้ใช้ถามเรื่องยอดเงิน/กระเป๋า/การลงทุน ให้ตอบจากข้อมูลนี้ตรงๆ ห้ามเดาตัวเลขเอง '
+        +'ถ้าคำถามเกี่ยวกับยอดเงินแต่ไม่มีข้อมูลตรงนี้ ให้บอกตามตรงว่าไม่มีข้อมูลตอนนี้')
+      : '';
+
     var faceText = recognizedFace
       ? ('\n\nระบบจดจำใบหน้าตรวจพบว่ากำลังคุยกับ: '+recognizedFace.name+' (รหัส '+recognizedFace.code+') '
         +'ให้ทักทาย/เอ่ยชื่อนี้อย่างเป็นธรรมชาติในคำตอบ (ไม่ต้องพูดคำว่า "รหัส" ออกเสียง เว้นแต่ผู้ใช้ถามถึง)')
@@ -5642,6 +5704,7 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
       + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
       + 'ให้ตอบเป็นข้อความธรรมดาล้วนๆ เหมือนพูดคุยปกติ เพราะคำตอบทั้งหมดจะถูกอ่านออกเสียงให้ฟัง'
       + factsText
+      + walletText
       + faceText
       + faceInstructions
       + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
