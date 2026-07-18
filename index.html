@@ -740,6 +740,10 @@
       </div>
       <div style="display:flex;align-items:center">
         <div class="nav-gps-btn" id="nav-gps-btn" onclick="openGPS()" title="ตำแหน่ง GPS">🐾</div>
+        <button type="button" id="nav-connect-wallet-btn" onclick="requireWallet('ใช้งาน', function(){})"
+          style="display:none;background:linear-gradient(135deg,var(--purple-mid),var(--pink));color:white;border:none;
+          border-radius:12px;padding:8px 14px;font-size:.72rem;font-weight:800;margin-right:8px;
+          font-family:'Nunito',sans-serif;cursor:pointer;white-space:nowrap">เชื่อมกระเป๋า</button>
         <div class="nav-user" onclick="navigate('profile')">
           <span class="nav-user-name" id="nav-username"></span>
           <div class="nav-user-avatar" id="nav-avatar"></div>
@@ -2845,6 +2849,9 @@ function renderMain(){
   var level=getLevel(getTotalTxAmount(member.id));
   document.getElementById('nav-username').textContent=member.name;
   var navAv=document.getElementById('nav-avatar');setAvatarEl(navAv,member);
+
+  var navConnectBtn=document.getElementById('nav-connect-wallet-btn');
+  if(navConnectBtn) navConnectBtn.style.display = member.walletAddress ? 'none' : 'block';
 
   var curEl=document.getElementById('wc-cur');
   var thbEquivEl=document.getElementById('wc-thb-equiv');
