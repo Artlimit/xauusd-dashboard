@@ -657,6 +657,14 @@
   <div class="glow g1"></div>
   <div class="glow g2"></div>
 
+  <div id="wallet-browser-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:500;
+      background:#ff3b30;color:white;padding:10px 14px;font-size:.72rem;line-height:1.4;
+      align-items:center;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+    <span style="flex:1">⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋าเงิน — กล้อง/ไมค์/ผู้ช่วย AI อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome หรือ Safari แทน</span>
+    <button type="button" onclick="document.getElementById('wallet-browser-banner').style.display='none'"
+      style="background:rgba(255,255,255,.25);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:.72rem;flex-shrink:0">ปิด</button>
+  </div>
+
   <div class="screen welcome screen-fade-in" id="scr-welcome">
     <div class="welcome-puppy">
       <svg viewBox="0 0 200 200" width="160" height="160">
@@ -5449,6 +5457,13 @@ function isLikelyWalletInAppBrowser(){
   return false;
 }
 
+/** โชว์แบนเนอร์เตือนตั้งแต่เปิดแอปครั้งแรก ถ้าเดาว่ากำลังอยู่ในเบราว์เซอร์แอปกระเป๋าเงิน (ปิดได้ กดแล้วไม่โชว์อีกจนกว่าจะโหลดหน้าใหม่) */
+function checkWalletBrowserBanner(){
+  if(!isLikelyWalletInAppBrowser()) return;
+  var banner=document.getElementById('wallet-browser-banner');
+  if(banner) banner.style.display='flex';
+}
+
 function openAIAssistant(){
   loadAIHistory();
   loadAIFacts();
@@ -6846,6 +6861,7 @@ function init(){
     // ถ้า error ใดๆ ให้แสดงหน้าต้อนรับ
     document.getElementById('scr-welcome').classList.add('active');
   }
+  try{ checkWalletBrowserBanner(); }catch(e){} // เตือนเรื่องเบราว์เซอร์กระเป๋า ไม่ให้กระทบ init หลักแม้พัง
 }
 
 // รันหลังจาก DOM โหลดเสร็จ
