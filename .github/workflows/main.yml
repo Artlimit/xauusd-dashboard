@@ -12,6 +12,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          
+      # เพิ่มขั้นตอนนี้เข้าไปเพื่อสร้างไฟล์ gradlew ให้โดยอัตโนมัติ
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+        
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
