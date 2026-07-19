@@ -194,21 +194,23 @@ class MainActivity : ComponentActivity() {
         handleIncomingDeepLink(intent)
     }
 
+    
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript(
+                "if (window._wcReconnect) { window._wcReconnect(); }",
+                null
+            )
+        }
+    }
     private fun handleIncomingDeepLink(intent: Intent?) {
         val data = intent?.data ?: return
         if (data.scheme == "puppypocket") {
             webView.evaluateJavascript(
+                "if (window._wcReconnect) { window._wcReconnect(); } " +
                 "if (typeof toast === 'function') { toast('success', 'กลับมาที่ PuppyPocket แล้ว กำลังเช็คสถานะการเชื่อมต่อ...'); }",
                 null
             )
         }
     }
-
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
-    }
-}
