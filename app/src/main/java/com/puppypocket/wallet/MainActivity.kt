@@ -16,6 +16,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -23,6 +25,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var tts: TextToSpeech
 
     private val puppyPocketUrl = "file:///android_asset/index.html"
 
@@ -32,7 +35,17 @@ class MainActivity : ComponentActivity() {
     private var pendingGeoOrigin: String? = null
 
     // ---- ตัวช่วย debug: ให้ JS ฝั่งเว็บส่ง error กลับมาแสดงเป็น popup ในแอปได้ ----
-    inner class AndroidDebugBridge {
+    
+inner class AndroidSpeakBridge {
+    @android.webkit.JavascriptInterface
+    fun speak(text:String){
+        runOnUiThread{
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AI")
+        }
+    }
+}
+
+inner class AndroidDebugBridge {
         @JavascriptInterface
         fun logError(msg: String) {
             runOnUiThread {
@@ -108,6 +121,8 @@ class MainActivity : ComponentActivity() {
 
         webView = WebView(this)
         setContentView(webView)
+
+        tts = TextToSpeech(this){ if(it==TextToSpeech.SUCCESS){ tts.language = Locale("th","TH") } }
         setupWebView()
 
         webView.loadUrl(puppyPocketUrl)
@@ -126,6 +141,7 @@ class MainActivity : ComponentActivity() {
         settings.setGeolocationEnabled(true)
 
         webView.addJavascriptInterface(AndroidDebugBridge(), "AndroidDebug")
+        webView.addJavascriptInterface(AndroidSpeakBridge(), "Android")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -287,6 +303,11 @@ class MainActivity : ComponentActivity() {
                 null
             )
         }
+    }
+
+    override fun onDestroy(){
+        if(::tts.isInitialized){ tts.stop(); tts.shutdown() }
+        super.onDestroy()
     }
 
     override fun onBackPressed() {
