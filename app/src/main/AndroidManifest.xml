@@ -41,17 +41,7 @@
                 <data android:scheme="puppypocket" />
             </intent-filter>
 
-            <!-- (ทางเลือก) App Link ผ่าน https — ต้องยืนยันความเป็นเจ้าของโดเมนก่อนใช้งานจริง
-                 ดูวิธีตั้งค่าไฟล์ assetlinks.json ใน README.md -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="artlimit.github.io"
-                    android:pathPrefix="/xauusd-dashboard" />
-            </intent-filter>
+            
         </activity>
 
     </application>
