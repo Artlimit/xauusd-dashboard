@@ -5670,15 +5670,51 @@ function processAIUserInput(userText){
 }
 
 function speakAIText(text){
+
   setAIStatus('speaking','กำลังพูด...');
-  if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); return; }
-  var utter=new SpeechSynthesisUtterance(text);
-  utter.lang='th-TH';
-  utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); };
-  utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); };
+
+  if(window.Android && typeof Android.speak==="function"){
+      Android.speak(text);
+      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+      return;
+  }
+
+  if(!window.speechSynthesis){
+      toast('error','เครื่องนี้ไม่รองรับการพูด');
+      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+      return;
+  }
+
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utter);
+
+  var utter=new SpeechSynthesisUtterance(text);
+
+  utter.lang="th-TH";
+  utter.rate=1;
+  utter.pitch=1;
+  utter.volume=1;
+
+  utter.onstart=function(){
+      console.log("AI Start Speak");
+  };
+
+  utter.onend=function(){
+      console.log("AI Finish");
+      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+  };
+
+  utter.onerror=function(e){
+      console.log(e);
+      toast('error','พูดไม่สำเร็จ');
+      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+  };
+
+  setTimeout(function(){
+      window.speechSynthesis.speak(utter);
+  },300);
+
 }
+
 
 function callClaudeAI(userText,imageBase64,recognizedFace){
   return ensureAIApiKeyAsync().then(function(apiKey){
