@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
     // เปลี่ยนเป็น URL จริงของคุณได้ตลอด (ตอนนี้ตรงกับ metadata.url ในเว็บ)
-    private val puppyPocketUrl = "https://artlimit.github.io/xauusd-dashboard/"
+    private val puppyPocketUrl = "file:///android_asset/index.html"
 
     // เก็บ callback ของ permission request จากหน้าเว็บ (กล้อง/ไมค์) ไว้ตอบกลับหลังผู้ใช้กด อนุญาต/ปฏิเสธ
     private var pendingWebPermissionRequest: PermissionRequest? = null
@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
         settings.domStorageEnabled = true          // จำเป็นสำหรับ localStorage ที่แอปใช้เก็บข้อมูลทั้งหมด
         settings.mediaPlaybackRequiresUserGesture = false // ให้ TTS/เสียงเล่นได้ทันทีตอนผู้ช่วย AI พูด
         settings.setSupportZoom(false)
-        settings.allowFileAccess = false
+        settings.allowFileAccess = true
         settings.allowContentAccess = false
 
         webView.webViewClient = object : WebViewClient() {
