@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -23,9 +24,9 @@ class MainActivity : ComponentActivity() {
     private val puppyPocketUrl = "file:///android_asset/index.html"
 
     private var pendingWebPermissionRequest: PermissionRequest? = null
-
-    // เก็บ callback สำหรับส่งไฟล์ที่ผู้ใช้เลือกกลับไปให้หน้าเว็บ
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingGeoCallback: GeolocationPermissions.Callback? = null
+    private var pendingGeoOrigin: String? = null
 
     private val requestAndroidPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -43,7 +44,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // เปิดหน้าต่างเลือกไฟล์ของระบบ แล้วส่งผลลัพธ์กลับไปให้ WebView
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -62,6 +62,22 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         callback.onReceiveValue(uris ?: arrayOf())
+    }
+
+    private val requestLocationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = grants.values.any { it }
+        val callback = pendingGeoCallback
+        val origin = pendingGeoOrigin
+        pendingGeoCallback = null
+        pendingGeoOrigin = null
+        if (callback != null && origin != null) {
+            callback.invoke(origin, granted, false)
+        }
+        if (!granted) {
+            Toast.makeText(this, "ต้องอนุญาตตำแหน่ง (GPS) ก่อนถึงจะใช้งานฟีเจอร์นี้ได้", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,6 +100,7 @@ class MainActivity : ComponentActivity() {
         settings.setSupportZoom(false)
         settings.allowFileAccess = true
         settings.allowContentAccess = false
+        settings.setGeolocationEnabled(true)
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -125,7 +142,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // เรียกทุกครั้งที่หน้าเว็บมีปุ่ม <input type="file"> ถูกกด
             override fun onShowFileChooser(
                 view: WebView,
                 filePathCallback: ValueCallback<Array<Uri>>,
@@ -135,7 +151,6 @@ class MainActivity : ComponentActivity() {
                 fileChooserCallback = filePathCallback
 
                 val intent = fileChooserParams.createIntent().apply {
-                    // อนุญาตเลือกได้หลายไฟล์ ถ้าหน้าเว็บรองรับ multiple
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, fileChooserParams.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
                 }
 
@@ -146,6 +161,28 @@ class MainActivity : ComponentActivity() {
                     fileChooserCallback = null
                     Toast.makeText(this@MainActivity, "ไม่พบแอปสำหรับเลือกไฟล์", Toast.LENGTH_SHORT).show()
                     false
+                }
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String,
+                callback: GeolocationPermissions.Callback
+            ) {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasPermission) {
+                    callback.invoke(origin, true, false)
+                } else {
+                    pendingGeoCallback = callback
+                    pendingGeoOrigin = origin
+                    requestLocationPermission.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
                 }
             }
         }
