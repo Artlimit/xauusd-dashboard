@@ -1,0 +1,18 @@
+# Project-wide Gradle settings.
+
+# Enable AndroidX (required — fixes "androidx dependencies detected but android.useAndroidX is not enabled")
+android.useAndroidX=true
+android.enableJetifier=true
+
+# Specifies the JVM arguments used for the Gradle daemon.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+
+# When configured, Gradle will run in incubating parallel mode.
+org.gradle.parallel=true
+
+# AndroidX package structure to make it clearer which packages are bundled with the
+# Android operating system, and which are packaged with your app's APK.
+android.nonTransitiveRClass=true
+
+# Kotlin code style for this project: "official" or "obsolete"
+kotlin.code.style=official
