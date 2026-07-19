@@ -13,12 +13,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           
-      # เพิ่มขั้นตอนนี้เข้าไปเพื่อสร้างไฟล์ gradlew ให้โดยอัตโนมัติ
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper
+      # ใช้ Action นี้ช่วยจัดการติดตั้ง Gradle ตัวเต็มให้เลย
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew assembleDebug
+      # เปลี่ยนมาสั่งบิลด์ผ่าน gradle โดยตรง ไม่ต้องพึ่ง gradlew
+      - name: Build with Gradle
+        run: gradle assembleDebug
+        
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
