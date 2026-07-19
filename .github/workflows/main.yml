@@ -13,13 +13,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           
-      # เจาะจงติดตั้ง Gradle เวอร์ชัน 8.4 เพื่อให้รองรับ SDK 34 ได้ร้อยเปอร์เซ็นต์
+      # อัปเกรดเป็นเวอร์ชัน 8.7 ตามที่ระบบร้องขอเรียบร้อยครับ
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.4'
+          gradle-version: '8.7'
         
-      # สั่งบิลด์แอป
       - name: Build with Gradle
         run: gradle assembleDebug
         
