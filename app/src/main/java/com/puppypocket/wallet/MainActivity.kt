@@ -5,10 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -27,6 +30,24 @@ class MainActivity : ComponentActivity() {
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
     private var pendingGeoOrigin: String? = null
+
+    // ---- ตัวช่วย debug: ให้ JS ฝั่งเว็บส่ง error กลับมาแสดงเป็น popup ในแอปได้ ----
+    inner class AndroidDebugBridge {
+        @JavascriptInterface
+        fun logError(msg: String) {
+            runOnUiThread {
+                showDebugDialog("JS Error", msg)
+            }
+        }
+    }
+
+    private fun showDebugDialog(title: String, message: String) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("ปิด", null)
+            .show()
+    }
 
     private val requestAndroidPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,6 +104,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        WebView.setWebContentsDebuggingEnabled(true)
+
         webView = WebView(this)
         setContentView(webView)
         setupWebView()
@@ -102,6 +125,8 @@ class MainActivity : ComponentActivity() {
         settings.allowContentAccess = false
         settings.setGeolocationEnabled(true)
 
+        webView.addJavascriptInterface(AndroidDebugBridge(), "AndroidDebug")
+
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
@@ -116,9 +141,58 @@ class MainActivity : ComponentActivity() {
                     false
                 }
             }
+
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request.isForMainFrame) {
+                    runOnUiThread {
+                        showDebugDialog(
+                            "โหลดหน้าเว็บไม่สำเร็จ",
+                            "URL: ${request.url}\nรหัส: ${error.errorCode}\nรายละเอียด: ${error.description}"
+                        )
+                    }
+                }
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                // ดักจับ JavaScript error ที่เกิดขึ้นบนหน้าเว็บ แล้วส่งกลับมาที่แอปให้เห็น
+                view.evaluateJavascript(
+                    """
+                    (function() {
+                        window.onerror = function(msg, src, line, col, err) {
+                            if (window.AndroidDebug) {
+                                AndroidDebug.logError('พบข้อผิดพลาด: ' + msg + '\\nไฟล์: ' + src + '\\nบรรทัด: ' + line + ':' + col);
+                            }
+                            return false;
+                        };
+                        if (window.AndroidDebug) {
+                            AndroidDebug.logError('หน้าเว็บโหลดเสร็จแล้ว (ไม่มี error ตอนโหลดเริ่มต้น)');
+                        }
+                    })();
+                    """.trimIndent(),
+                    null
+                )
+            }
         }
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    runOnUiThread {
+                        showDebugDialog(
+                            "Console Error",
+                            "${consoleMessage.message()}\n(บรรทัด ${consoleMessage.lineNumber()} ใน ${consoleMessage.sourceId()})"
+                        )
+                    }
+                }
+                return true
+            }
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val needed = mutableListOf<String>()
