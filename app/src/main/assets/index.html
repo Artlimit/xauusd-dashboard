@@ -5510,17 +5510,17 @@ function stopAICamera(){
   _aiVisionOn=false;
   var video=document.getElementById('ai-cam-video');
   if(video){ video.srcObject=null; video.style.display='none'; }
-  var off=document.getElemen'claude-sonnet-4-6'-4-6'off'); if(off) off.style.display='block';
+  var off=document.getElementById('ai-cam-off'); if(off) off.style.display='block';
   var flipBtn=document.getElementById('ai-cam-flip'); if(flipBtn) flipBtn.style.display='none';
 }
-/** สลับกล้องหน้า/หลัง — ปิดสตรีมเดิมแล้วเปิดใหม่ด้วย facingMode ตรงข้าม */
+  /** สลับกล้องหน้า/หลัง — ปิดสตรีมเดิมแล้วเปิดใหม่ด้วย facingMode ตรงข้าม */
 function flipAICamera(){
   if(!_aiVisionOn) return;
   var newFacing = (_aiCamFacing==='environment') ? 'user' : 'environment';
   if(_aiCamStream){ _aiCamStream.getTracks().forEach(function(t){t.stop();}); _aiCamStream=null; }
   var video=document.getElementById('ai-cam-video');
   if(video) video.srcObject=null;
-
+  
   // มือถือหลายรุ่นต้องพักสักครู่ก่อนเปิดกล้องใหม่ ไม่งั้นจะ error "Could not start video source"
   setTimeout(function(){
     navigator.mediaDevices.getUserMedia({video:{facingMode:newFacing}, audio:false}).then(function(stream){
