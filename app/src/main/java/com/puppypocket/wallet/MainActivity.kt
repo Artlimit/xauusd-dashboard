@@ -194,7 +194,6 @@ class MainActivity : ComponentActivity() {
         handleIncomingDeepLink(intent)
     }
 
-    
     override fun onResume() {
         super.onResume()
         if (::webView.isInitialized) {
@@ -204,6 +203,7 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+
     private fun handleIncomingDeepLink(intent: Intent?) {
         val data = intent?.data ?: return
         if (data.scheme == "puppypocket") {
@@ -214,3 +214,12 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+}
