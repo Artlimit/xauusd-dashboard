@@ -17,71 +17,84 @@
   <!-- face-api.js (ใช้สำหรับผู้ช่วย AI จดจำใบหน้า) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/dist/face-api.js"></script>
   <!-- WalletConnect AppKit (Reown) — ไม่ต้อง bundler -->
+  <!-- ห่อด้วย dynamic import + try/catch ทั้งก้อน: บางครั้งไลบรารีย่อยที่โหลดผ่าน esm.run (เช่น uint8arrays)
+       จะพังหรือโหลดไม่ครบเพราะปัญหาที่ CDN/เครือข่ายฝั่งผู้ใช้ ไม่เกี่ยวกับโค้ดของเรา
+       ถ้าใช้ import แบบ static ตรงๆ เวลาโมดูลย่อยพังจะกลายเป็น uncaught error เด้งเตือนทั้งแอปทันที
+       เปลี่ยนมาใช้ import() แบบ dynamic ในนี้ ครอบ try/catch ได้ ถ้าพังจะแค่ปิดปุ่มเชื่อมต่อ WalletConnect ชั่วคราว
+       ส่วนอื่นของแอป (เอเจนต์ราคา/ผู้ช่วย AI/กระเป๋าครอบครัว ฯลฯ) ยังทำงานได้ปกติ เพราะโค้ดที่ใช้ window._wcModal/_wcReconnect เช็ค if(...) ก่อนใช้อยู่แล้ว -->
   <script type="module">
-    import { createAppKit } from 'https://esm.run/@reown/appkit@1.6.8';
-    import { WagmiAdapter } from 'https://esm.run/@reown/appkit-adapter-wagmi@1.6.8';
-    import { polygon, bsc, arbitrum, base } from 'https://esm.run/@reown/appkit/networks';
-    import { reconnect } from 'https://esm.run/@wagmi/core@2.16.7';
+    (async function initWalletConnect(){
+      try {
+        var { createAppKit } = await import('https://esm.run/@reown/appkit@1.6.8');
+        var { WagmiAdapter } = await import('https://esm.run/@reown/appkit-adapter-wagmi@1.6.8');
+        var { polygon, bsc, arbitrum, base } = await import('https://esm.run/@reown/appkit/networks');
+        var { reconnect } = await import('https://esm.run/@wagmi/core@2.16.7');
 
-    var projectId = '869fb81440023bf647988605e6decfd6';
+        var projectId = '869fb81440023bf647988605e6decfd6';
 
-    var networks = [polygon, bsc, arbitrum, base];
-    var wagmiAdapter = new WagmiAdapter({ projectId, networks });
+        var networks = [polygon, bsc, arbitrum, base];
+        var wagmiAdapter = new WagmiAdapter({ projectId, networks });
 
-    var modal = createAppKit({
-      adapters: [wagmiAdapter],
-      projectId,
-      networks,
-      defaultNetwork: polygon,
-      metadata: {
-        name: 'PuppyPocket',
-        description: 'กระเป๋า USDC สำหรับครอบครัว',
-        url: 'https://artlimit.github.io/xauusd-dashboard/',
-        icons: ['https://artlimit.github.io/xauusd-dashboard/icon-192.png'],
-        redirect: { native: 'puppypocket://', universal: 'https://artlimit.github.io/xauusd-dashboard/' }
-      },
-      features: {
-        analytics: false,
-        email: false,
-        socials: false
-      },
-      themeMode: 'dark',
-      themeVariables: {
-        '--w3m-color-mix': '#6c3fa0',
-        '--w3m-color-mix-strength': 40,
-        '--w3m-accent': '#8b5fcf',
-        '--w3m-border-radius-master': '14px'
-      }
-    });
-
-    // expose modal + wagmiConfig ให้โค้ดหลักใช้
-    window._wcModal = modal;
-    window._wagmiConfig = wagmiAdapter.wagmiConfig;
-
-    // reconnect กรณีเคยเชื่อมไว้แล้ว
-    reconnect(wagmiAdapter.wagmiConfig);
-
-    // เปิดให้โค้ดฝั่ง UI (fallback modal) เรียกเช็ก Session เดิมซ้ำได้ โดยไม่สร้าง logic ใหม่
-    // แค่ห่อ reconnect() เดิมไว้ให้เรียกจากนอก module ได้ — ถ้า session ยังอยู่
-    // modal.subscribeAccount ด้านล่างจะยิง window._onWCConnected() ให้เองอัตโนมัติ
-    window._wcReconnect = function () { return reconnect(wagmiAdapter.wagmiConfig); };
-
-    // listen state change — เมื่อเชื่อมสำเร็จ inject provider เข้าระบบเดิม
-    modal.subscribeAccount(async function(account) {
-      if (account && account.address && account.isConnected) {
-        try {
-          var { getConnectorClient } = await import('https://esm.run/@wagmi/core@2.16.7');
-          var client = await getConnectorClient(wagmiAdapter.wagmiConfig);
-          var { providers, account: acc } = client;
-          if (client.transport && client.transport.type === 'custom') {
-            var raw = providers || client;
-            window._wcProvider = raw;
-            // trigger app's connect handler
-            if (window._onWCConnected) window._onWCConnected(account.address, raw);
+        var modal = createAppKit({
+          adapters: [wagmiAdapter],
+          projectId,
+          networks,
+          defaultNetwork: polygon,
+          metadata: {
+            name: 'PuppyPocket',
+            description: 'กระเป๋า USDC สำหรับครอบครัว',
+            url: 'https://artlimit.github.io/xauusd-dashboard/',
+            icons: ['https://artlimit.github.io/xauusd-dashboard/icon-192.png'],
+            redirect: { native: 'puppypocket://', universal: 'https://artlimit.github.io/xauusd-dashboard/' }
+          },
+          features: {
+            analytics: false,
+            email: false,
+            socials: false
+          },
+          themeMode: 'dark',
+          themeVariables: {
+            '--w3m-color-mix': '#6c3fa0',
+            '--w3m-color-mix-strength': 40,
+            '--w3m-accent': '#8b5fcf',
+            '--w3m-border-radius-master': '14px'
           }
-        } catch(e) { console.warn('WC provider extract error', e); }
+        });
+
+        // expose modal + wagmiConfig ให้โค้ดหลักใช้
+        window._wcModal = modal;
+        window._wagmiConfig = wagmiAdapter.wagmiConfig;
+
+        // reconnect กรณีเคยเชื่อมไว้แล้ว
+        reconnect(wagmiAdapter.wagmiConfig);
+
+        // เปิดให้โค้ดฝั่ง UI (fallback modal) เรียกเช็ก Session เดิมซ้ำได้ โดยไม่สร้าง logic ใหม่
+        // แค่ห่อ reconnect() เดิมไว้ให้เรียกจากนอก module ได้ — ถ้า session ยังอยู่
+        // modal.subscribeAccount ด้านล่างจะยิง window._onWCConnected() ให้เองอัตโนมัติ
+        window._wcReconnect = function () { return reconnect(wagmiAdapter.wagmiConfig); };
+
+        // listen state change — เมื่อเชื่อมสำเร็จ inject provider เข้าระบบเดิม
+        modal.subscribeAccount(async function(account) {
+          if (account && account.address && account.isConnected) {
+            try {
+              var { getConnectorClient } = await import('https://esm.run/@wagmi/core@2.16.7');
+              var client = await getConnectorClient(wagmiAdapter.wagmiConfig);
+              var { providers, account: acc } = client;
+              if (client.transport && client.transport.type === 'custom') {
+                var raw = providers || client;
+                window._wcProvider = raw;
+                // trigger app's connect handler
+                if (window._onWCConnected) window._onWCConnected(account.address, raw);
+              }
+            } catch(e) { console.warn('WC provider extract error', e); }
+          }
+        });
+      } catch(e) {
+        // โหลด/สร้าง WalletConnect ไม่สำเร็จ (เช่นไลบรารีย่อยจาก CDN พัง) — ไม่ทำให้แอปพัง แค่ปิดฟีเจอร์เชื่อมกระเป๋าคริปโตชั่วคราว
+        console.warn('[WalletConnect init failed — ฟีเจอร์เชื่อมกระเป๋าคริปโตจะใช้ไม่ได้ชั่วคราว ส่วนอื่นของแอปยังใช้ได้ปกติ]', e);
+        window._wcInitFailed = true;
       }
-    });
+    })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
@@ -2129,6 +2142,9 @@ async function connectBitgetWallet() {
     window._wcModal.open({ view: 'Connect' });
     _startWCFallbackWatcher();
     return;
+  }
+  if (window._wcInitFailed) {
+    toast('error', 'เชื่อมต่อ WalletConnect ไม่ได้ตอนนี้ (โหลดไลบรารีจาก CDN ไม่สำเร็จ) ลองรีเฟรชหน้าใหม่อีกครั้ง');
   }
 
   // fallback: deep link ไป Bitget (ใช้กรณีเปิดแอป Bitget บนมือถือโดยตรง)
