@@ -5480,6 +5480,7 @@ function openAIAssistant(){
   loadAIFacesList();
   renderAIFaceList();
   document.getElementById('modal-ai-assistant').classList.add('open');
+  loadAIWakeSettings();
   if(isLikelyWalletInAppBrowser()){
     setAIStatus('idle','⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋า — กล้อง/ไมค์อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome/Safari แทน');
     toast('error','เบราว์เซอร์นี้อาจบล็อกกล้อง/ไมค์ — แนะนำเปิดผ่าน Chrome หรือ Safari');
