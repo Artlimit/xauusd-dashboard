@@ -5892,7 +5892,7 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
         messages:messages
       })
     }).then(function(res){
-      if(!res.ok){ return res.text().then(function(t){ throw new Error('API error '+res.status+': '+t); }); }
+      if(!res.ok){ return res.text().then(function(t){ throw new Error(friendlyAIErrorMessage(res.status,t)); }); }
       return res.json();
     }).then(function(data){
       var content=data.content||[];
@@ -5901,6 +5901,22 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
       return out.trim();
     });
   });
+}
+/** แปลง error response ดิบจาก Anthropic API ให้เป็นข้อความอ่านง่าย แทนที่จะโชว์ JSON ดิบยาวๆ ให้ผู้ใช้เห็น */
+function friendlyAIErrorMessage(status,rawText){
+  var apiMsg='';
+  var errType='';
+  try{
+    var parsed=JSON.parse(rawText);
+    errType=(parsed.error&&parsed.error.type)||'';
+    apiMsg=(parsed.error&&parsed.error.message)||'';
+  }catch(e){ /* parse ไม่ได้ก็ใช้ rawText ตรงๆ ด้านล่าง */ }
+  if(status===401 || errType==='authentication_error') return 'API Key ไม่ถูกต้องหรือหมดอายุ — ลองตั้งค่า API Key ใหม่ที่ปุ่ม ⚙️ ด้านล่าง';
+  if(status===400 && /credit balance is too low/i.test(apiMsg)) return 'เครดิตในบัญชี Anthropic API หมด — กรุณาเติมเครดิตที่ console.anthropic.com > Plans & Billing';
+  if(status===429 || errType==='rate_limit_error') return 'ใช้งานถี่เกินไป (rate limit) กรุณารอสักครู่แล้วลองใหม่';
+  if(status===529 || errType==='overloaded_error') return 'ระบบ Anthropic กำลังโหลดสูง กรุณาลองใหม่อีกครั้งในอีกสักครู่';
+  if(apiMsg) return 'API error '+status+': '+apiMsg;
+  return 'API error '+status+' — ลองใหม่อีกครั้ง';
 }
 
 // ============================================================
