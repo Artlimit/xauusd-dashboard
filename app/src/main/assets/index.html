@@ -1268,6 +1268,11 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11h.01M2 11h20"/></svg>
         เชื่อมต่อ Bitget Wallet
       </button>
+      <button class="s-btn" id="cw-wc-connect-btn" onclick="lazyConnectWalletConnect()" style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:7px;background:linear-gradient(135deg,#3b99fc,#1e6fd9);color:#fff;border:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a4 4 0 018 0"/><path d="M5 9a8 8 0 0114 0"/><circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none"/></svg>
+        เชื่อมต่อด้วย WalletConnect
+      </button>
+      <div style="font-size:.6rem;color:var(--fg-m);margin-bottom:10px">ใช้ได้กับกระเป๋าอื่นๆ เช่น Trust Wallet, MetaMask, imToken, Rainbow ฯลฯ — สแกน QR หรือเปิดแอปกระเป๋าที่มีอยู่</div>
       <div style="font-size:.62rem;color:var(--fg-m)" id="cw-hint">
         บนมือถือ: จะเปิดแอป Bitget ให้อัตโนมัติ
       </div>
@@ -2105,6 +2110,13 @@ window._onWCConnected = async function(address, rawProvider) {
     // renderMain จะถูกเรียกใน linkWalletToSession แล้ว
     setTimeout(startAutoRefresh, 1000);
     toast('success', 'เชื่อมต่อ Wallet สำเร็จ! 🎉');
+    // WalletConnect เชื่อมสำเร็จแบบ async (ผู้ใช้ไปอนุมัติในแอปกระเป๋าแยกต่างหาก) — ต้องปิด modal และรัน callback ที่ค้างไว้ตรงนี้เอง
+    // ต่างจากการเชื่อม extension ตรงๆ ที่ lazyConnectWallet ปิด/รันให้เองอยู่แล้วเพราะ await เสร็จพร้อมกัน
+    closeModal('modal-connect-wallet');
+    if (_pendingActionAfterConnect && connectedWalletAddress) {
+      var pendingCb = _pendingActionAfterConnect; _pendingActionAfterConnect = null;
+      setTimeout(pendingCb, 350);
+    }
   } catch(e) {
     console.error('WC connect handler error', e);
     // แม้ signer fail ก็ยัง linkWalletToSession ได้ เพราะ fetch ใช้ public RPC
@@ -2160,6 +2172,22 @@ async function connectBitgetWallet() {
 
   toast('error', 'ไม่พบ Wallet — กรุณาติดตั้ง Bitget Wallet Extension');
   setTimeout(function(){ window.open('https://web3.bitget.com/en/wallet-download','_blank'); }, 800);
+}
+
+/** เปิด WalletConnect โดยตรง (ข้ามการตรวจหา Bitget extension) — ใช้เชื่อมกระเป๋าอื่นๆ ที่รองรับ WalletConnect
+ * เช่น Trust Wallet, MetaMask, imToken, Rainbow ผ่าน QR/deep link แทน */
+async function connectViaWalletConnect() {
+  if (!window._wcModal) {
+    for (var wcTries = 0; wcTries < 10 && !window._wcModal; wcTries++) {
+      await new Promise(function(r){ setTimeout(r, 200); });
+    }
+  }
+  if (window._wcModal) {
+    window._wcModal.open({ view: 'Connect' });
+    _startWCFallbackWatcher();
+    return;
+  }
+  toast('error', 'เชื่อมต่อ WalletConnect ไม่ได้ตอนนี้ (โหลดไลบรารีจาก CDN ไม่สำเร็จ) ลองรีเฟรชหน้าใหม่อีกครั้ง');
 }
 
 async function doConnectWithProvider(raw) {
@@ -3445,6 +3473,20 @@ async function lazyConnectWallet() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 11h.01M2 11h20"/></svg> เชื่อมต่อ Bitget Wallet';
+  }
+}
+
+async function lazyConnectWalletConnect() {
+  var btn = document.getElementById('cw-wc-connect-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ico">⏳</span> กำลังเปิด WalletConnect...';
+  try {
+    await connectViaWalletConnect();
+    // ไม่ปิด modal-connect-wallet ทันทีตรงนี้ เพราะ WalletConnect ต้องรอผู้ใช้สแกน/อนุมัติในแอปกระเป๋าอีกที
+    // (เชื่อมสำเร็จจริงจะยิง window._onWCConnected ที่ปิด modal และรัน callback ที่ค้างไว้ให้เองอยู่แล้ว)
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12a4 4 0 018 0"/><path d="M5 9a8 8 0 0114 0"/><circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none"/></svg> เชื่อมต่อด้วย WalletConnect';
   }
 }
 
