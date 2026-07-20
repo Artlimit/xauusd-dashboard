@@ -5489,6 +5489,7 @@ function openAIAssistant(){
   loadAIFacesList();
   renderAIFaceList();
   document.getElementById('modal-ai-assistant').classList.add('open');
+  if(Date.now() - _aiContextCache.lastFetch > 5*60*1000){ refreshAILocationAndWeather(); }
   loadAIWakeSettings();
   if(isLikelyWalletInAppBrowser()){
     setAIStatus('idle','⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋า — กล้อง/ไมค์อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome/Safari แทน');
