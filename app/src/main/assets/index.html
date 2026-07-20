@@ -5913,7 +5913,46 @@ function speakAIText(text){
 
 }
 
+var _aiContextCache = { locationText:'', weatherText:'', lastFetch:0 };
 
+function getAIDateTimeText(){
+  var now = new Date();
+  var days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  var months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  var hh = String(now.getHours()).padStart(2,'0');
+  var mm = String(now.getMinutes()).padStart(2,'0');
+  return 'วัน'+days[now.getDay()]+'ที่ '+now.getDate()+' '+months[now.getMonth()]+' พ.ศ.'+(now.getFullYear()+543)+' เวลา '+hh+':'+mm+' น.';
+}
+
+function weatherCodeToText(code){
+  var map = {0:'ท้องฟ้าแจ่มใส',1:'มีเมฆบางส่วน',2:'มีเมฆเป็นบางส่วน',3:'มีเมฆมาก',45:'มีหมอก',48:'หมอกน้ำแข็ง',
+    51:'ฝนตกปรอยๆเบา',53:'ฝนตกปรอยๆ',55:'ฝนตกปรอยๆหนัก',61:'ฝนตกเบา',63:'ฝนตกปานกลาง',65:'ฝนตกหนัก',
+    71:'หิมะตกเบา',80:'ฝนซู่เบา',81:'ฝนซู่ปานกลาง',82:'ฝนซู่หนัก',95:'พายุฝนฟ้าคะนอง'};
+  return map[code] || 'ไม่ทราบสภาพอากาศแน่ชัด';
+}
+
+function refreshAILocationAndWeather(){
+  return new Promise(function(resolve){
+    if(!navigator.geolocation){ resolve(); return; }
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var lat=pos.coords.latitude, lon=pos.coords.longitude;
+      _aiContextCache.locationText = 'พิกัด '+lat.toFixed(4)+', '+lon.toFixed(4)+' (แม่นยำ ~'+Math.round(pos.coords.accuracy)+' เมตร จาก GPS/WiFi/เครือข่ายรวมกัน)';
+      fetch('https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(data && data.current){
+            _aiContextCache.weatherText = 'อุณหภูมิ '+data.current.temperature_2m+'°C ความชื้น '+data.current.relative_humidity_2m
+              +'% ลม '+data.current.wind_speed_10m+' กม./ชม. ('+weatherCodeToText(data.current.weather_code)+')';
+          }
+          _aiContextCache.lastFetch = Date.now();
+          resolve();
+        }).catch(function(){ _aiContextCache.lastFetch = Date.now(); resolve(); });
+    }, function(){
+      _aiContextCache.locationText=''; _aiContextCache.weatherText='';
+      resolve();
+    }, {enableHighAccuracy:true, timeout:8000, maximumAge:60000});
+  });
+    }
 function callClaudeAI(userText,imageBase64,recognizedFace){
   return ensureAIApiKeyAsync().then(function(apiKey){
     if(!apiKey) throw new Error('ยังไม่ได้ตั้งค่า API Key');
