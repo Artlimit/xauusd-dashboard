@@ -1795,6 +1795,7 @@
         <div class="ai-status-dot" id="ai-status-dot"></div>
         <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม</div>
       </div>
+      <div id="ai-reply-box" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:.78rem;color:var(--fg);line-height:1.5;max-height:120px;overflow-y:auto"></div>
 
       <div class="ai-mic-row">
         <button type="button" class="ai-mic-btn" id="ai-mic-btn" onclick="onAIMicClick()">
@@ -5672,6 +5673,8 @@ function onAIMicClick(){
 function startAIListening(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  var replyBox=document.getElementById('ai-reply-box');
+  if(replyBox) replyBox.style.display='none';
   setAIStatus('listening','กำลังฟัง...');
   _aiRecognition=new SR();
   _aiRecognition.lang='th-TH';
@@ -5855,15 +5858,46 @@ function processAIUserInput(userText){
   });
 }
 
+function showAIReplyText(text){
+  var box=document.getElementById('ai-reply-box');
+  if(!box) return;
+  box.textContent=text;
+  box.style.display='block';
+}
+
+var _thaiVoiceCache=null;
+/** เลือกเสียงไทยแบบเจาะจง แทนที่จะปล่อยให้เบราว์เซอร์เดาเองจาก lang เฉยๆ
+ * เพราะบางเบราว์เซอร์/บางเครื่องถ้าไม่มีเสียงไทยจริงๆ จะ speak() แบบเงียบๆ ไม่มีเสียงและไม่ error ให้เห็นเลย */
+function pickThaiVoice(){
+  if(!window.speechSynthesis) return null;
+  var voices=window.speechSynthesis.getVoices()||[];
+  if(!voices.length) return null;
+  return voices.find(function(v){return v.lang==='th-TH';})
+    || voices.find(function(v){return v.lang && v.lang.indexOf('th')===0;})
+    || null;
+}
 function speakAIText(text){
   setAIStatus('speaking','กำลังพูด...');
+  showAIReplyText(text);
   if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); return; }
-  var utter=new SpeechSynthesisUtterance(text);
-  utter.lang='th-TH';
-  utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
-  utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utter);
+  function doSpeak(){
+    var utter=new SpeechSynthesisUtterance(text);
+    utter.lang='th-TH';
+    var v=pickThaiVoice();
+    if(v) utter.voice=v; // ถ้าไม่มีเสียงไทยเลยในเครื่อง ก็ปล่อยให้ใช้เสียง default ไป (อาจอ่านสำเนียงแปลกแต่ยังมีเสียง)
+    utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
+    utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+  // เสียงพูด (voice list) ของเบราว์เซอร์โหลดแบบ async — ถ้ายังไม่มีเลยตอนนี้ ให้รอ event 'voiceschanged' สั้นๆ ก่อนค่อยพูด
+  // กันเคส speak() เงียบเพราะยังไม่มี voice ให้ผูกตอนเรียกครั้งแรกของเพจ
+  if(window.speechSynthesis.getVoices().length===0){
+    var fallbackTimer=setTimeout(doSpeak, 400);
+    window.speechSynthesis.onvoiceschanged=function(){ clearTimeout(fallbackTimer); doSpeak(); };
+  } else {
+    doSpeak();
+  }
 }
 
 function callClaudeAI(userText,imageBase64,recognizedFace){
