@@ -5491,6 +5491,7 @@ function openAIAssistant(){
 function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
 function closeAIAssistant(){
   document.getElementById('modal-ai-assistant').classList.remove('open');
+  stopAIWakeMode();
   stopAIListening();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
   stopAICamera();
