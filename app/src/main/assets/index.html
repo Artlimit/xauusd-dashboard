@@ -1796,6 +1796,9 @@
         <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม</div>
       </div>
       <div id="ai-reply-box" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:.78rem;color:var(--fg);line-height:1.5;max-height:120px;overflow-y:auto"></div>
+      <div id="ai-replay-row" style="display:none;text-align:center;margin-top:6px">
+        <button type="button" onclick="replayLastAIReply()" style="background:none;border:none;color:var(--purple-mid);font-size:.72rem;text-decoration:underline;padding:4px">🔊 ฟังอีกครั้ง</button>
+      </div>
 
       <div class="ai-mic-row">
         <button type="button" class="ai-mic-btn" id="ai-mic-btn" onclick="onAIMicClick()">
@@ -5667,14 +5670,31 @@ function onAIMicClick(){
   if(aiAgentState==='thinking' || aiAgentState==='speaking'){
     if(window.speechSynthesis) window.speechSynthesis.cancel();
   }
+  primeSpeechSynthesis(); // ต้องเรียกตรงนี้แบบ sync ในตัว handler ของการแตะจริงๆ ไม่งั้นบาง browser (เช่น Safari มือถือ) จะเงียบเสียงตอนพูดจริงทีหลัง
   startAIListening();
 }
+
+/** "ปลุก" speechSynthesis ด้วย utterance สั้นๆ ตรงจังหวะแตะจริงของผู้ใช้ (user gesture)
+ * เพราะมือถือหลายตัว (โดยเฉพาะ Safari/WebView) จะเงียบเสียงถ้า speak() ถูกเรียกทีหลังจาก
+ * promise/async chain (เช่นหลัง fetch API เสร็จ) ที่ไม่ได้อยู่ในจังหวะแตะโดยตรงแล้ว */
+function primeSpeechSynthesis(){
+  if(!window.speechSynthesis || _speechPrimed) return;
+  try{
+    var warm=new SpeechSynthesisUtterance(' ');
+    warm.volume=0;
+    window.speechSynthesis.speak(warm);
+    _speechPrimed=true;
+  }catch(e){ /* เงียบไว้ ไม่ต้องกวนผู้ใช้ ถ้าพังจะยังมีปุ่ม 🔊 ฟังอีกครั้ง เป็นทางสำรอง */ }
+}
+var _speechPrimed=false;
 
 function startAIListening(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
   var replyBox=document.getElementById('ai-reply-box');
   if(replyBox) replyBox.style.display='none';
+  var replayRow=document.getElementById('ai-replay-row');
+  if(replayRow) replayRow.style.display='none';
   setAIStatus('listening','กำลังฟัง...');
   _aiRecognition=new SR();
   _aiRecognition.lang='th-TH';
@@ -5858,11 +5878,27 @@ function processAIUserInput(userText){
   });
 }
 
+var _lastAIReplyText='';
 function showAIReplyText(text){
   var box=document.getElementById('ai-reply-box');
   if(!box) return;
   box.textContent=text;
   box.style.display='block';
+  _lastAIReplyText=text;
+  var replayRow=document.getElementById('ai-replay-row');
+  if(replayRow) replayRow.style.display='block';
+}
+/** ปุ่ม "ฟังอีกครั้ง" — เรียก speak() ตรงในจังหวะแตะปุ่มเลย (user gesture ของแท้)
+ * ใช้เป็นทางสำรองรับประกันว่าจะมีเสียงออก ถึงแม้รอบอัตโนมัติก่อนหน้าจะถูกเบราว์เซอร์เงียบเสียงไปก็ตาม */
+function replayLastAIReply(){
+  if(!_lastAIReplyText) return;
+  if(!window.speechSynthesis){ toast('error','เบราว์เซอร์นี้ไม่รองรับการพูดออกเสียง'); return; }
+  var utter=new SpeechSynthesisUtterance(_lastAIReplyText);
+  utter.lang='th-TH';
+  var v=pickThaiVoice();
+  if(v) utter.voice=v;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
 }
 
 var _thaiVoiceCache=null;
