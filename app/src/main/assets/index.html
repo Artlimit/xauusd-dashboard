@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>PuppyPocket — กระเป๋าครอบครัว</title>
-  <script  src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Leaflet (ใช้แสดงแผนที่เส้นทางการวิ่งในภารกิจสุขภาพ) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -1764,24 +1764,15 @@
         <div id="ai-face-list" style="margin-top:8px"></div>
       </div>
 
-      <div class="ai-face-box">
+      <div class="ai-face-box" id="ai-handsfree-box">
         <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:8px">🎙️ โหมดมือว่าง — เรียกชื่อนี้แล้วคุยได้เลยไม่ต้องแตะไมค์ พูดคำปิดแล้วจะหยุดฟังจนกว่าจะเรียกชื่ออีกครั้ง</div>
         <div class="ai-face-row">
-          <input class="w-input" id="ai-wake-name-input" type="text" placeholder="ชื่อเรียก เช่น พุดเดิ้ล">
-          <input class="w-input" id="ai-sleep-phrase-input" type="text" placeholder="คำปิด เช่น ขอบคุณ">
+          <input class="w-input" id="ai-wake-word" type="text" placeholder="ชื่อเรียก เช่น พุดเดิ้ล">
+          <input class="w-input" id="ai-stop-word" type="text" placeholder="คำปิด เช่น ขอบคุณ">
         </div>
-        <button type="button" class="s-btn" onclick="saveAIWakeSettings()">💾 บันทึกและเปิดโหมดมือว่าง</button>
-        <div id="ai-wake-status-text" style="font-size:.68rem;color:var(--fg-m);margin-top:6px;text-align:center"></div>
+        <button type="button" class="s-btn" id="ai-handsfree-toggle-btn" onclick="toggleHandsFreeMode()">💾 บันทึกและเปิดโหมดมือว่าง</button>
       </div>
-      <div class="ai-face-box">
-        <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:8px">🎙️ โหมดมือว่าง — เรียกชื่อนี้แล้วคุยได้เลยไม่ต้องแตะไมค์ พูดคำปิดแล้วจะหยุดฟังจนกว่าจะเรียกชื่ออีกครั้ง</div>
-        <div class="ai-face-row">
-          <input class="w-input" id="ai-wake-name-input" type="text" placeholder="ชื่อเรียก เช่น พุดเดิ้ล">
-          <input class="w-input" id="ai-sleep-phrase-input" type="text" placeholder="คำปิด เช่น ขอบคุณ">
-        </div>
-        <button type="button" class="s-btn" onclick="saveAIWakeSettings()">💾 บันทึกและเปิดโหมดมือว่าง</button>
-        <div id="ai-wake-status-text" style="font-size:.68rem;color:var(--fg-m);margin-top:6px;text-align:center"></div>
-      </div>
+
       <div class="ai-status-box">
         <div class="ai-status-dot" id="ai-status-dot"></div>
         <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม</div>
@@ -1796,7 +1787,22 @@
       <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="closeAIAssistant()">‹ ปิดหน้าต่าง</button>
       <div style="text-align:center;margin-top:10px">
         <a href="javascript:void(0)" style="font-size:.7rem;color:var(--fg-m);text-decoration:underline" onclick="openAIApiKeyModal(function(){})">⚙️ ตั้งค่า/เปลี่ยน API Key</a>
+        &nbsp;·&nbsp;
+        <a href="javascript:void(0)" style="font-size:.7rem;color:var(--fg-m);text-decoration:underline" onclick="openAIPersonaModal()">🎭 ปรับพฤติกรรม</a>
       </div>
+    </div>
+  </div>
+
+  <div class="sheet-overlay" id="modal-ai-persona" style="z-index:200" onclick="closeAIPersonaOutside(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">🎭 ปรับพฤติกรรมผู้ช่วย AI</div>
+      <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:12px;text-align:center">
+        อธิบายว่าอยากให้ผู้ช่วยพูดคุย/แสดงตัวแบบไหน เช่น "พูดสุภาพ ลงท้ายด้วยค่ะ ชอบเล่นมุกเบาๆ" — จะมีผลกับทุกบทสนทนาต่อจากนี้
+      </div>
+      <textarea class="w-input" id="ai-persona-input" rows="5" placeholder="เช่น พูดสั้นกระชับ เป็นกันเอง ใช้ภาษาน่ารักๆ" style="width:100%;resize:vertical;margin-bottom:12px"></textarea>
+      <button type="button" class="s-btn" onclick="saveAIPersona()">บันทึกพฤติกรรม</button>
+      <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:8px" onclick="closeAIPersonaModal()">ยกเลิก</button>
     </div>
   </div>
 
@@ -4571,6 +4577,7 @@ function showAgentAddForm(editId){
   document.getElementById('agent-list-view').style.display='none';
   document.getElementById('agent-add-view').style.display='block';
   document.getElementById('agent-cond-value').value='';
+  document.getElementById('agent-cond-type').value='above';
   document.getElementById('agent-realert').checked=false;
   document.getElementById('agent-tiers-list').innerHTML='';
 
@@ -4809,6 +4816,7 @@ function submitAgentWatch(){
   var delta = allocated - oldAllocated;
 
   if(editing){
+    if(editing.coin!==coinId){ delete editing.basePrice; } // เปลี่ยนเหรียญ ต้องรีเซ็ตราคาฐานเดิม ไม่งั้นคำนวณเป้าหมาย/มูลค่าพอร์ตผิดเพราะยังอ้างอิงราคาเหรียญเก่าอยู่
     editing.coin=coinId; editing.condType=condType; editing.condValue=condValue;
     editing.allocated=allocated; editing.tiers=tiers; editing.reAlertOnReturn=reAlert;
     editing.triggered=false; editing.triggeredTiers=[]; // เปลี่ยนเงื่อนไขแล้ว รีเซ็ตสถานะแจ้งเตือน
@@ -4835,6 +4843,7 @@ function deleteAgentWatch(id){
   var target=all.find(function(w){return w.id===id;});
   var list=all.filter(function(w){return w.id!==id;});
   saveAgentWatches(list);
+  if(target && target.coin==='gold' && target.liveSync && _mt5Unsub){ _mt5Unsub(); _mt5Unsub=null; } // เลิกฟัง Firestore ทันทีที่ลบรายการทองคำที่เชื่อมสด ไม่งั้น listener ค้างทำงานเปล่าๆ
   if(target && target.allocated>0){
     var label=AGENT_COIN_LABELS[target.coin]||target.coin.toUpperCase();
     logAgentInvestmentTx(-target.allocated, label);
@@ -5488,9 +5497,12 @@ function openAIAssistant(){
   loadAIFacts();
   loadAIFacesList();
   renderAIFaceList();
+  var hf=getHandsFreeSettings();
+  var wakeInput=document.getElementById('ai-wake-word'), stopInput=document.getElementById('ai-stop-word');
+  if(wakeInput) wakeInput.value=hf.wakeWord||'';
+  if(stopInput) stopInput.value=hf.stopWord||'';
+  updateHandsFreeButtonUI();
   document.getElementById('modal-ai-assistant').classList.add('open');
-  if(Date.now() - _aiContextCache.lastFetch > 5*60*1000){ refreshAILocationAndWeather(); }
-  loadAIWakeSettings();
   if(isLikelyWalletInAppBrowser()){
     setAIStatus('idle','⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋า — กล้อง/ไมค์อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome/Safari แทน');
     toast('error','เบราว์เซอร์นี้อาจบล็อกกล้อง/ไมค์ — แนะนำเปิดผ่าน Chrome หรือ Safari');
@@ -5501,7 +5513,7 @@ function openAIAssistant(){
 function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
 function closeAIAssistant(){
   document.getElementById('modal-ai-assistant').classList.remove('open');
-  stopAIWakeMode();
+  stopHandsFreeMode();
   stopAIListening();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
   stopAICamera();
@@ -5610,11 +5622,17 @@ function startAIListening(){
   _aiRecognition.onresult=function(event){
     try{
       var text=event.results[0][0].transcript;
+      if(_handsFreeOn && _hfStopWord && text.indexOf(_hfStopWord)>-1){
+        stopHandsFreeMode();
+        toast('info','ปิดโหมดมือว่างแล้ว');
+        return;
+      }
       processAIUserInput(text);
     }catch(e){
       console.warn('[onresult error]',e);
       toast('error','เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
       setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
+      resumeWakeListeningIfNeeded();
     }
   };
   _aiRecognition.onerror=function(event){
@@ -5629,6 +5647,7 @@ function startAIListening(){
     };
     setAIStatus('idle', (msgMap[reason]||('ฟังไม่สำเร็จ ('+reason+')')) + ' — แตะไมค์เพื่อลองใหม่');
     toast('error','ผู้ช่วย AI ฟังไม่สำเร็จ: '+reason);
+    resumeWakeListeningIfNeeded();
   };
   _aiRecognition.onend=function(){
     if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
@@ -5637,6 +5656,93 @@ function startAIListening(){
 }
 function stopAIListening(){
   if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
+}
+
+// ============================================================
+// โหมดมือว่าง (hands-free / wake word) — ฟังชื่อเรียกเบาๆ ตลอดเวลา พอได้ยินค่อยเปิดฟังคำสั่งจริง
+// พูดคำปิดตอนสั่งงานแล้วจะปิดโหมดนี้ทั้งหมด (ไม่ใช่แค่พักฟัง)
+// ============================================================
+var _handsFreeOn=false;
+var _wakeRecognition=null;
+var _hfWakeWord='';
+var _hfStopWord='';
+function handsFreeKey(){ var m=getCurrentMember(); return m?('pp_ai_handsfree_'+m.id):'pp_ai_handsfree_none'; }
+function getHandsFreeSettings(){ return load(handsFreeKey(), {wakeWord:'', stopWord:''}); }
+function saveHandsFreeSettings(obj){ save(handsFreeKey(), obj); }
+function updateHandsFreeButtonUI(){
+  var btn=document.getElementById('ai-handsfree-toggle-btn');
+  if(!btn) return;
+  btn.textContent = _handsFreeOn ? '⏹️ ปิดโหมดมือว่าง' : '💾 บันทึกและเปิดโหมดมือว่าง';
+}
+function toggleHandsFreeMode(){
+  if(_handsFreeOn){ stopHandsFreeMode(); return; }
+  var wake=(document.getElementById('ai-wake-word').value||'').trim();
+  var stop=(document.getElementById('ai-stop-word').value||'').trim();
+  if(!wake){ toast('error','กรุณาตั้งชื่อเรียกก่อน'); return; }
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  saveHandsFreeSettings({wakeWord:wake, stopWord:stop});
+  stopAIListening(); // เลิกโหมดแตะไมค์ปกติก่อน กันชนกันตอนเปิดฟังชื่อเรียก
+  _hfWakeWord=wake; _hfStopWord=stop; _handsFreeOn=true;
+  updateHandsFreeButtonUI();
+  toast('success','เปิดโหมดมือว่างแล้ว — เรียก "'+wake+'" ได้เลย');
+  listenForWakeWord();
+}
+function stopHandsFreeMode(){
+  _handsFreeOn=false;
+  if(_wakeRecognition){ try{ _wakeRecognition.stop(); }catch(e){} _wakeRecognition=null; }
+  updateHandsFreeButtonUI();
+  setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+}
+function listenForWakeWord(){
+  if(!_handsFreeOn) return;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ stopHandsFreeMode(); return; }
+  setAIStatus('idle','โหมดมือว่าง — เรียก "'+_hfWakeWord+'" เพื่อเริ่มคุย');
+  _wakeRecognition=new SR();
+  _wakeRecognition.lang='th-TH';
+  _wakeRecognition.continuous=true;
+  _wakeRecognition.interimResults=false;
+  _wakeRecognition.maxAlternatives=1;
+  var handled=false;
+  _wakeRecognition.onresult=function(event){
+    var lastText=event.results[event.results.length-1][0].transcript||'';
+    if(!handled && lastText.indexOf(_hfWakeWord)>-1){
+      handled=true;
+      try{ _wakeRecognition.stop(); }catch(e){}
+      _wakeRecognition=null;
+      startAIListening(); // ได้ยินชื่อเรียกแล้ว สลับไปฟังคำสั่งจริงแบบเดียวกับแตะไมค์
+    }
+  };
+  _wakeRecognition.onerror=function(){ /* no-speech/aborted เกิดปกติตอนเงียบ ไม่ต้องแจ้งเตือน แค่ฟังต่อ */ };
+  _wakeRecognition.onend=function(){
+    if(_handsFreeOn && !handled) listenForWakeWord(); // ฟังชื่อเรียกต่อไปเรื่อยๆ จนกว่าจะปิดโหมดหรือได้ยินชื่อ
+  };
+  try{ _wakeRecognition.start(); }catch(e){}
+}
+/** เรียกหลังคุยจบรอบหนึ่ง (AI พูดจบ/ผิดพลาด) — ถ้ายังอยู่ในโหมดมือว่างให้กลับไปฟังชื่อเรียกต่อ */
+function resumeWakeListeningIfNeeded(){
+  if(_handsFreeOn) listenForWakeWord();
+}
+
+// ============================================================
+// ปรับพฤติกรรมผู้ช่วย AI — คำสั่งเสริมที่ผู้ใช้กำหนดเอง แนบเข้า system prompt ทุกครั้ง
+// ============================================================
+function aiPersonaKey(){ return 'pp_ai_persona'; }
+function getAIPersona(){ return load(aiPersonaKey(),''); }
+function openAIPersonaModal(){
+  var input=document.getElementById('ai-persona-input');
+  if(input) input.value=getAIPersona();
+  document.getElementById('modal-ai-persona').classList.add('open');
+}
+function closeAIPersonaModal(){ document.getElementById('modal-ai-persona').classList.remove('open'); }
+function closeAIPersonaOutside(e){ if(e.target===e.currentTarget) closeAIPersonaModal(); }
+function saveAIPersona(){
+  var input=document.getElementById('ai-persona-input');
+  var v=(input&&input.value||'').trim();
+  save(aiPersonaKey(), v);
+  closeAIPersonaModal();
+  toast('success', v ? 'บันทึกพฤติกรรมที่ต้องการแล้ว' : 'ล้างการตั้งค่าพฤติกรรมแล้ว (กลับไปใช้ค่าเริ่มต้น)');
 }
 
 /** ตัดสัญลักษณ์ markdown ทิ้ง เผื่อ AI หลุดใส่มา (**หนา**, *เอียง*, # หัวข้อ, - บูลเลต, `โค้ด`) จะได้ไม่พูด "ดอกจัน"/"ชาร์ป" ออกมา */
@@ -5651,185 +5757,7 @@ function stripMarkdownForSpeech(text){
     .trim();
 }
 
-  // ---- โหมดมือว่าง: เรียกชื่อแล้วคุยได้เลย / พูดคำปิดแล้วหยุดฟัง ----
-var _aiWakeName='', _aiSleepPhrase='', _aiWakeModeOn=false, _aiWakeState='sleeping'; // 'sleeping' | 'active'
-var _aiWakeRecognition=null;
-
-function loadAIWakeSettings(){
-  try{
-    _aiWakeName = localStorage.getItem('ai_wake_name') || '';
-    _aiSleepPhrase = localStorage.getItem('ai_sleep_phrase') || '';
-  }catch(e){}
-}
-function saveAIWakeSettings(){
-  var nameInput=document.getElementById('ai-wake-name-input');
-  var phraseInput=document.getElementById('ai-sleep-phrase-input');
-  var name=(nameInput.value||'').trim();
-  var phrase=(phraseInput.value||'').trim();
-  if(!name || !phrase){ toast('error','กรอกทั้งชื่อเรียกและคำปิดก่อนบันทึก'); return; }
-  try{
-    localStorage.setItem('ai_wake_name', name);
-    localStorage.setItem('ai_sleep_phrase', phrase);
-  }catch(e){}
-  _aiWakeName=name; _aiSleepPhrase=phrase;
-  nameInput.value=''; phraseInput.value='';
-  toast('success','บันทึกแล้ว เริ่มโหมดมือว่าง — เรียก "'+name+'" ได้เลย');
-  startAIWakeMode();
-}
-
-function updateAIWakeStatusText(){
-  var el=document.getElementById('ai-wake-status-text');
-  if(!el) return;
-  if(!_aiWakeModeOn){ el.textContent=''; return; }
-  el.textContent = _aiWakeState==='sleeping'
-    ? ('😴 กำลังฟังรอเรียกชื่อ "'+_aiWakeName+'"...')
-    : ('👂 กำลังคุยอยู่ — พูด "'+_aiSleepPhrase+'" เพื่อปิด');
-}
-
-function startAIWakeMode(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียงต่อเนื่อง'); return; }
-  if(!_aiWakeName || !_aiSleepPhrase){ toast('error','ยังไม่ได้ตั้งชื่อเรียก/คำปิด'); return; }
-  _aiWakeModeOn=true;
-  _aiWakeState='sleeping';
-  updateAIWakeStatusText();
-  runAIWakeRecognitionLoop();
-}
-function stopAIWakeMode(){
-  _aiWakeModeOn=false;
-  if(_aiWakeRecognition){ try{ _aiWakeRecognition.stop(); }catch(e){} _aiWakeRecognition=null; }
-  updateAIWakeStatusText();
-}
-
-function runAIWakeRecognitionLoop(){
-  if(!_aiWakeModeOn) return;
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  _aiWakeRecognition=new SR();
-  _aiWakeRecognition.lang='th-TH';
-  _aiWakeRecognition.interimResults=false;
-  _aiWakeRecognition.maxAlternatives=1;
-
-  _aiWakeRecognition.onresult=function(event){
-    var text='';
-    try{ text=event.results[event.results.length-1][0].transcript||''; }catch(e){}
-    var lower=text.toLowerCase();
-
-    if(_aiWakeState==='sleeping'){
-      if(_aiWakeName && lower.indexOf(_aiWakeName.toLowerCase())!==-1){
-        _aiWakeState='active';
-        updateAIWakeStatusText();
-        var rest=text.replace(new RegExp(_aiWakeName,'i'),'').trim();
-        if(rest){ processAIUserInput(rest); }
-        else { speakAIText('ว่าไงคะ'); }
-      }
-    } else { // active
-      if(_aiSleepPhrase && lower.indexOf(_aiSleepPhrase.toLowerCase())!==-1){
-        _aiWakeState='sleeping';
-        updateAIWakeStatusText();
-        speakAIText('ได้ค่ะ');
-      } else if(text.trim()){
-        processAIUserInput(text);
-      }
-    }
-  };
-  _aiWakeRecognition.onerror=function(event){
-    console.warn('[wake mic error]', event&&event.error);
-  };
-  _aiWakeRecognition.onend=function(){
-    if(_aiWakeModeOn){ setTimeout(runAIWakeRecognitionLoop, 300); } // ฟังใหม่อัตโนมัติ
-  };
-  try{ _aiWakeRecognition.start(); }catch(e){}
-} 
-// ---- โหมดมือว่าง: เรียกชื่อแล้วคุยได้เลย / พูดคำปิดแล้วหยุดฟัง ----
-var _aiWakeName='', _aiSleepPhrase='', _aiWakeModeOn=false, _aiWakeState='sleeping'; // 'sleeping' | 'active'
-var _aiWakeRecognition=null;
-
-function loadAIWakeSettings(){
-  try{
-    _aiWakeName = localStorage.getItem('ai_wake_name') || '';
-    _aiSleepPhrase = localStorage.getItem('ai_sleep_phrase') || '';
-  }catch(e){}
-}
-function saveAIWakeSettings(){
-  var nameInput=document.getElementById('ai-wake-name-input');
-  var phraseInput=document.getElementById('ai-sleep-phrase-input');
-  var name=(nameInput.value||'').trim();
-  var phrase=(phraseInput.value||'').trim();
-  if(!name || !phrase){ toast('error','กรอกทั้งชื่อเรียกและคำปิดก่อนบันทึก'); return; }
-  try{
-    localStorage.setItem('ai_wake_name', name);
-    localStorage.setItem('ai_sleep_phrase', phrase);
-  }catch(e){}
-  _aiWakeName=name; _aiSleepPhrase=phrase;
-  nameInput.value=''; phraseInput.value='';
-  toast('success','บันทึกแล้ว เริ่มโหมดมือว่าง — เรียก "'+name+'" ได้เลย');
-  startAIWakeMode();
-}
-
-function updateAIWakeStatusText(){
-  var el=document.getElementById('ai-wake-status-text');
-  if(!el) return;
-  if(!_aiWakeModeOn){ el.textContent=''; return; }
-  el.textContent = _aiWakeState==='sleeping'
-    ? ('😴 กำลังฟังรอเรียกชื่อ "'+_aiWakeName+'"...')
-    : ('👂 กำลังคุยอยู่ — พูด "'+_aiSleepPhrase+'" เพื่อปิด');
-}
-
-function startAIWakeMode(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียงต่อเนื่อง'); return; }
-  if(!_aiWakeName || !_aiSleepPhrase){ toast('error','ยังไม่ได้ตั้งชื่อเรียก/คำปิด'); return; }
-  _aiWakeModeOn=true;
-  _aiWakeState='sleeping';
-  updateAIWakeStatusText();
-  runAIWakeRecognitionLoop();
-}
-function stopAIWakeMode(){
-  _aiWakeModeOn=false;
-  if(_aiWakeRecognition){ try{ _aiWakeRecognition.stop(); }catch(e){} _aiWakeRecognition=null; }
-  updateAIWakeStatusText();
-}
-
-function runAIWakeRecognitionLoop(){
-  if(!_aiWakeModeOn) return;
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  _aiWakeRecognition=new SR();
-  _aiWakeRecognition.lang='th-TH';
-  _aiWakeRecognition.interimResults=false;
-  _aiWakeRecognition.maxAlternatives=1;
-
-  _aiWakeRecognition.onresult=function(event){
-    var text='';
-    try{ text=event.results[event.results.length-1][0].transcript||''; }catch(e){}
-    var lower=text.toLowerCase();
-
-    if(_aiWakeState==='sleeping'){
-      if(_aiWakeName && lower.indexOf(_aiWakeName.toLowerCase())!==-1){
-        _aiWakeState='active';
-        updateAIWakeStatusText();
-        var rest=text.replace(new RegExp(_aiWakeName,'i'),'').trim();
-        if(rest){ processAIUserInput(rest); }
-        else { speakAIText('ว่าไงคะ'); }
-      }
-    } else { // active
-      if(_aiSleepPhrase && lower.indexOf(_aiSleepPhrase.toLowerCase())!==-1){
-        _aiWakeState='sleeping';
-        updateAIWakeStatusText();
-        speakAIText('ได้ค่ะ');
-      } else if(text.trim()){
-        processAIUserInput(text);
-      }
-    }
-  };
-  _aiWakeRecognition.onerror=function(event){
-    console.warn('[wake mic error]', event&&event.error);
-  };
-  _aiWakeRecognition.onend=function(){
-    if(_aiWakeModeOn){ setTimeout(runAIWakeRecognitionLoop, 300); } // ฟังใหม่อัตโนมัติ
-  };
-  try{ _aiWakeRecognition.start(); }catch(e){}
-}
-  function processAIUserInput(userText){
+function processAIUserInput(userText){
   setAIStatus('thinking','กำลังประมวลผล...');
   var imageBase64=captureAIFrameBase64();
 
@@ -5865,95 +5793,21 @@ function runAIWakeRecognitionLoop(){
   Promise.race([workPromise, timeoutPromise]).catch(function(err){
     toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
+    resumeWakeListeningIfNeeded();
   });
 }
 
 function speakAIText(text){
-
   setAIStatus('speaking','กำลังพูด...');
-
-  if(window.Android && typeof Android.speak==="function"){
-      Android.speak(text);
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
-      return;
-  }
-
-  if(!window.speechSynthesis){
-      toast('error','เครื่องนี้ไม่รองรับการพูด');
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
-      return;
-  }
-
-  window.speechSynthesis.cancel();
-
+  if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); return; }
   var utter=new SpeechSynthesisUtterance(text);
-
-  utter.lang="th-TH";
-  utter.rate=1;
-  utter.pitch=1;
-  utter.volume=1;
-
-  utter.onstart=function(){
-      console.log("AI Start Speak");
-  };
-
-  utter.onend=function(){
-      console.log("AI Finish");
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
-  };
-
-  utter.onerror=function(e){
-      console.log(e);
-      toast('error','พูดไม่สำเร็จ');
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
-  };
-
-  setTimeout(function(){
-      window.speechSynthesis.speak(utter);
-  },300);
-
+  utter.lang='th-TH';
+  utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
+  utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); };
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
 }
 
-var _aiContextCache = { locationText:'', weatherText:'', lastFetch:0 };
-
-function getAIDateTimeText(){
-  var now = new Date();
-  var days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
-  var months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-  var hh = String(now.getHours()).padStart(2,'0');
-  var mm = String(now.getMinutes()).padStart(2,'0');
-  return 'วัน'+days[now.getDay()]+'ที่ '+now.getDate()+' '+months[now.getMonth()]+' พ.ศ.'+(now.getFullYear()+543)+' เวลา '+hh+':'+mm+' น.';
-}
-
-function weatherCodeToText(code){
-  var map = {0:'ท้องฟ้าแจ่มใส',1:'มีเมฆบางส่วน',2:'มีเมฆเป็นบางส่วน',3:'มีเมฆมาก',45:'มีหมอก',48:'หมอกน้ำแข็ง',
-    51:'ฝนตกปรอยๆเบา',53:'ฝนตกปรอยๆ',55:'ฝนตกปรอยๆหนัก',61:'ฝนตกเบา',63:'ฝนตกปานกลาง',65:'ฝนตกหนัก',
-    71:'หิมะตกเบา',80:'ฝนซู่เบา',81:'ฝนซู่ปานกลาง',82:'ฝนซู่หนัก',95:'พายุฝนฟ้าคะนอง'};
-  return map[code] || 'ไม่ทราบสภาพอากาศแน่ชัด';
-}
-
-function refreshAILocationAndWeather(){
-  return new Promise(function(resolve){
-    if(!navigator.geolocation){ resolve(); return; }
-    navigator.geolocation.getCurrentPosition(function(pos){
-      var lat=pos.coords.latitude, lon=pos.coords.longitude;
-      _aiContextCache.locationText = 'พิกัด '+lat.toFixed(4)+', '+lon.toFixed(4)+' (แม่นยำ ~'+Math.round(pos.coords.accuracy)+' เมตร จาก GPS/WiFi/เครือข่ายรวมกัน)';
-      fetch('https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m')
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-          if(data && data.current){
-            _aiContextCache.weatherText = 'อุณหภูมิ '+data.current.temperature_2m+'°C ความชื้น '+data.current.relative_humidity_2m
-              +'% ลม '+data.current.wind_speed_10m+' กม./ชม. ('+weatherCodeToText(data.current.weather_code)+')';
-          }
-          _aiContextCache.lastFetch = Date.now();
-          resolve();
-        }).catch(function(){ _aiContextCache.lastFetch = Date.now(); resolve(); });
-    }, function(){
-      _aiContextCache.locationText=''; _aiContextCache.weatherText='';
-      resolve();
-    }, {enableHighAccuracy:true, timeout:8000, maximumAge:60000});
-  });
-    }
 function callClaudeAI(userText,imageBase64,recognizedFace){
   return ensureAIApiKeyAsync().then(function(apiKey){
     if(!apiKey) throw new Error('ยังไม่ได้ตั้งค่า API Key');
@@ -5989,9 +5843,11 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
         + 'ระบบจะจดจำใบหน้าและสร้างรหัสให้เองอัตโนมัติ ไม่ต้องถามหารหัสจากผู้ใช้ '
         + 'ถ้าไม่มีการแนะนำชื่อใหม่ ห้ามใส่บรรทัด [FACE] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง');
 
-    var contextText = '\n\nข้อมูลบริบทปัจจุบัน:\n- เวลาปัจจุบัน: '+getAIDateTimeText()
-        + (_aiContextCache.locationText ? ('\n- ตำแหน่งผู้ใช้ตอนนี้: '+_aiContextCache.locationText) : '')
-        + (_aiContextCache.weatherText ?  ('\n- สภาพอากาศบริเวณนี้ตอนนี้: '+_aiContextCache.weatherText) : '');
+    var personaCustom = getAIPersona();
+    var personaText = personaCustom
+      ? ('\n\nสไตล์การพูดคุยที่ผู้ใช้ต้องการเป็นพิเศษ (ให้ทำตามนี้เสมอ ยกเว้นขัดกับความปลอดภัย): '+personaCustom)
+      : '';
+
     var systemPrompt = 'คุณคือผู้ช่วย AI ในแอป PuppyPocket ที่พูดคุยด้วยเสียงและมองเห็นผ่านกล้องมือถือได้ '
       + 'ตอบให้กระชับ เป็นธรรมชาติ เหมาะกับการพูดออกเสียง '
       + 'ห้ามใช้ markdown เด็ดขาด (ห้ามมี **ตัวหนา** *ตัวเอียง* # หัวข้อ - บูลเลต หรือ backtick ใดๆ) '
@@ -6000,7 +5856,7 @@ function callClaudeAI(userText,imageBase64,recognizedFace){
       + walletText
       + faceText
       + faceInstructions
-      + contextText
+      + personaText
       + '\n\nถ้าในคำตอบนี้ผู้ใช้เล่าข้อมูลสำคัญใหม่ที่ควรจำไว้ระยะยาว (เช่น ชื่อสัตว์เลี้ยง ของโปรด วันสำคัญ นิสัย) '
       + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
       + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
