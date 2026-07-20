@@ -1773,6 +1773,15 @@
         <button type="button" class="s-btn" onclick="saveAIWakeSettings()">💾 บันทึกและเปิดโหมดมือว่าง</button>
         <div id="ai-wake-status-text" style="font-size:.68rem;color:var(--fg-m);margin-top:6px;text-align:center"></div>
       </div>
+      <div class="ai-face-box">
+        <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:8px">🎙️ โหมดมือว่าง — เรียกชื่อนี้แล้วคุยได้เลยไม่ต้องแตะไมค์ พูดคำปิดแล้วจะหยุดฟังจนกว่าจะเรียกชื่ออีกครั้ง</div>
+        <div class="ai-face-row">
+          <input class="w-input" id="ai-wake-name-input" type="text" placeholder="ชื่อเรียก เช่น พุดเดิ้ล">
+          <input class="w-input" id="ai-sleep-phrase-input" type="text" placeholder="คำปิด เช่น ขอบคุณ">
+        </div>
+        <button type="button" class="s-btn" onclick="saveAIWakeSettings()">💾 บันทึกและเปิดโหมดมือว่าง</button>
+        <div id="ai-wake-status-text" style="font-size:.68rem;color:var(--fg-m);margin-top:6px;text-align:center"></div>
+      </div>
       <div class="ai-status-box">
         <div class="ai-status-dot" id="ai-status-dot"></div>
         <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม</div>
