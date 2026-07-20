@@ -5639,7 +5639,96 @@ function stripMarkdownForSpeech(text){
     .trim();
 }
 
-function processAIUserInput(userText){
+  // ---- โหมดมือว่าง: เรียกชื่อแล้วคุยได้เลย / พูดคำปิดแล้วหยุดฟัง ----
+var _aiWakeName='', _aiSleepPhrase='', _aiWakeModeOn=false, _aiWakeState='sleeping'; // 'sleeping' | 'active'
+var _aiWakeRecognition=null;
+
+function loadAIWakeSettings(){
+  try{
+    _aiWakeName = localStorage.getItem('ai_wake_name') || '';
+    _aiSleepPhrase = localStorage.getItem('ai_sleep_phrase') || '';
+  }catch(e){}
+}
+function saveAIWakeSettings(){
+  var nameInput=document.getElementById('ai-wake-name-input');
+  var phraseInput=document.getElementById('ai-sleep-phrase-input');
+  var name=(nameInput.value||'').trim();
+  var phrase=(phraseInput.value||'').trim();
+  if(!name || !phrase){ toast('error','กรอกทั้งชื่อเรียกและคำปิดก่อนบันทึก'); return; }
+  try{
+    localStorage.setItem('ai_wake_name', name);
+    localStorage.setItem('ai_sleep_phrase', phrase);
+  }catch(e){}
+  _aiWakeName=name; _aiSleepPhrase=phrase;
+  nameInput.value=''; phraseInput.value='';
+  toast('success','บันทึกแล้ว เริ่มโหมดมือว่าง — เรียก "'+name+'" ได้เลย');
+  startAIWakeMode();
+}
+
+function updateAIWakeStatusText(){
+  var el=document.getElementById('ai-wake-status-text');
+  if(!el) return;
+  if(!_aiWakeModeOn){ el.textContent=''; return; }
+  el.textContent = _aiWakeState==='sleeping'
+    ? ('😴 กำลังฟังรอเรียกชื่อ "'+_aiWakeName+'"...')
+    : ('👂 กำลังคุยอยู่ — พูด "'+_aiSleepPhrase+'" เพื่อปิด');
+}
+
+function startAIWakeMode(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียงต่อเนื่อง'); return; }
+  if(!_aiWakeName || !_aiSleepPhrase){ toast('error','ยังไม่ได้ตั้งชื่อเรียก/คำปิด'); return; }
+  _aiWakeModeOn=true;
+  _aiWakeState='sleeping';
+  updateAIWakeStatusText();
+  runAIWakeRecognitionLoop();
+}
+function stopAIWakeMode(){
+  _aiWakeModeOn=false;
+  if(_aiWakeRecognition){ try{ _aiWakeRecognition.stop(); }catch(e){} _aiWakeRecognition=null; }
+  updateAIWakeStatusText();
+}
+
+function runAIWakeRecognitionLoop(){
+  if(!_aiWakeModeOn) return;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  _aiWakeRecognition=new SR();
+  _aiWakeRecognition.lang='th-TH';
+  _aiWakeRecognition.interimResults=false;
+  _aiWakeRecognition.maxAlternatives=1;
+
+  _aiWakeRecognition.onresult=function(event){
+    var text='';
+    try{ text=event.results[event.results.length-1][0].transcript||''; }catch(e){}
+    var lower=text.toLowerCase();
+
+    if(_aiWakeState==='sleeping'){
+      if(_aiWakeName && lower.indexOf(_aiWakeName.toLowerCase())!==-1){
+        _aiWakeState='active';
+        updateAIWakeStatusText();
+        var rest=text.replace(new RegExp(_aiWakeName,'i'),'').trim();
+        if(rest){ processAIUserInput(rest); }
+        else { speakAIText('ว่าไงคะ'); }
+      }
+    } else { // active
+      if(_aiSleepPhrase && lower.indexOf(_aiSleepPhrase.toLowerCase())!==-1){
+        _aiWakeState='sleeping';
+        updateAIWakeStatusText();
+        speakAIText('ได้ค่ะ');
+      } else if(text.trim()){
+        processAIUserInput(text);
+      }
+    }
+  };
+  _aiWakeRecognition.onerror=function(event){
+    console.warn('[wake mic error]', event&&event.error);
+  };
+  _aiWakeRecognition.onend=function(){
+    if(_aiWakeModeOn){ setTimeout(runAIWakeRecognitionLoop, 300); } // ฟังใหม่อัตโนมัติ
+  };
+  try{ _aiWakeRecognition.start(); }catch(e){}
+}
+  function processAIUserInput(userText){
   setAIStatus('thinking','กำลังประมวลผล...');
   var imageBase64=captureAIFrameBase64();
 
