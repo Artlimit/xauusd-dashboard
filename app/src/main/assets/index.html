@@ -5878,6 +5878,25 @@ function processAIUserInput(userText){
   });
 }
 
+/** เช็คว่าแอป native (ถ้ามีการเชื่อมสะพานไว้) มีช่องทางพูดเสียงให้ใช้ไหม
+ * รองรับ 2 รูปแบบสะพานที่พบบ่อยที่สุด:
+ * - Android WebView: window.Android.speak(text)  (ตรงกับ addJavascriptInterface(AndroidSpeakBridge(), "Android") ใน MainActivity.kt)
+ * - iOS WKWebView:   window.webkit.messageHandlers.ttsSpeak.postMessage(text)
+ * ถ้าแอปยังไม่ได้เชื่อมสะพานนี้ไว้ ฟังก์ชันจะ return false แล้วโค้ดจะ fallback ไปใช้ Web Speech ตามปกติ */
+function speakViaNativeBridge(text){
+  try{
+    if(window.Android && typeof window.Android.speak==='function'){
+      window.Android.speak(text);
+      return true;
+    }
+    if(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ttsSpeak){
+      window.webkit.messageHandlers.ttsSpeak.postMessage(text);
+      return true;
+    }
+  }catch(e){ console.warn('[native TTS bridge error]',e); }
+  return false;
+}
+
 var _lastAIReplyText='';
 function showAIReplyText(text){
   var box=document.getElementById('ai-reply-box');
@@ -5892,7 +5911,8 @@ function showAIReplyText(text){
  * ใช้เป็นทางสำรองรับประกันว่าจะมีเสียงออก ถึงแม้รอบอัตโนมัติก่อนหน้าจะถูกเบราว์เซอร์เงียบเสียงไปก็ตาม */
 function replayLastAIReply(){
   if(!_lastAIReplyText) return;
-  if(!window.speechSynthesis){ toast('error','เบราว์เซอร์นี้ไม่รองรับการพูดออกเสียง'); return; }
+  if(speakViaNativeBridge(_lastAIReplyText)) return;
+  if(!window.speechSynthesis){ toast('error','เบราว์เซอร์นี้ไม่รองรับการพูดออกเสียง — ต้องเชื่อมสะพาน native TTS ในแอปก่อน'); return; }
   var utter=new SpeechSynthesisUtterance(_lastAIReplyText);
   utter.lang='th-TH';
   var v=pickThaiVoice();
@@ -5915,6 +5935,12 @@ function pickThaiVoice(){
 function speakAIText(text){
   setAIStatus('speaking','กำลังพูด...');
   showAIReplyText(text);
+  if(speakViaNativeBridge(text)){
+    // ไม่รู้ระยะเวลาพูดจริงจาก native ฝั่งนี้ ประมาณเวลาไว้คร่าวๆ จากความยาวข้อความแล้วค่อยกลับ idle
+    var estMs=Math.max(1500, Math.min(text.length*70, 15000));
+    setTimeout(function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); }, estMs);
+    return;
+  }
   if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); resumeWakeListeningIfNeeded(); return; }
   function doSpeak(){
     var utter=new SpeechSynthesisUtterance(text);
