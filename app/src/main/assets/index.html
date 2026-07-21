@@ -5665,6 +5665,7 @@ function onAIMicClick(){
   if(aiAgentState==='listening'){
     stopAIListening();
     setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+    resumeWakeListeningIfNeeded(); // กลับไปฟังชื่อเรียกต่อถ้ายังเปิดโหมดมือว่างอยู่ ไม่งั้นโหมดมือว่างจะค้าง ไม่ฟังอะไรต่อเลย
     return;
   }
   if(aiAgentState==='thinking' || aiAgentState==='speaking'){
@@ -5691,6 +5692,7 @@ var _speechPrimed=false;
 function startAIListening(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  stopWakeRecognition(); // สำคัญ: ถ้าโหมดมือว่างกำลังฟังชื่อเรียกอยู่เบื้องหลัง ต้องหยุดก่อน ไม่งั้นมี SpeechRecognition 2 ตัวชนกัน ทำให้ฟังไม่ติด/หลุดกลางคัน (อาการ "เด้ง")
   var replyBox=document.getElementById('ai-reply-box');
   if(replyBox) replyBox.style.display='none';
   var replayRow=document.getElementById('ai-replay-row');
@@ -5764,6 +5766,7 @@ function toggleHandsFreeMode(){
   if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
   saveHandsFreeSettings({wakeWord:wake, stopWord:stop});
   stopAIListening(); // เลิกโหมดแตะไมค์ปกติก่อน กันชนกันตอนเปิดฟังชื่อเรียก
+  stopWakeRecognition(); // กันเผื่อมีของเก่าค้างอยู่ (ไม่ควรมี แต่กันไว้ปลอดภัยกว่า)
   _hfWakeWord=wake; _hfStopWord=stop; _handsFreeOn=true;
   updateHandsFreeButtonUI();
   toast('success','เปิดโหมดมือว่างแล้ว — เรียก "'+wake+'" ได้เลย');
@@ -5771,33 +5774,43 @@ function toggleHandsFreeMode(){
 }
 function stopHandsFreeMode(){
   _handsFreeOn=false;
-  if(_wakeRecognition){ try{ _wakeRecognition.stop(); }catch(e){} _wakeRecognition=null; }
+  stopWakeRecognition();
   updateHandsFreeButtonUI();
   setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม');
+}
+/** หยุดการฟังชื่อเรียกแบบสะอาด — เคลียร์ onend/onresult ก่อน stop() เสมอ
+ * เพราะไม่งั้น onend เดิมจะ trigger listenForWakeWord() restart ตัวเองทันทีที่เรา stop() เอง
+ * (จุดนี้แหละที่ทำให้ก่อนหน้านี้เกิดอาการฟัง 2 ตัวชนกัน/เด้งออกกลางคัน) */
+function stopWakeRecognition(){
+  if(_wakeRecognition){
+    _wakeRecognition.onend=null;
+    _wakeRecognition.onresult=null;
+    _wakeRecognition.onerror=null;
+    try{ _wakeRecognition.stop(); }catch(e){}
+    _wakeRecognition=null;
+  }
 }
 function listenForWakeWord(){
   if(!_handsFreeOn) return;
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ stopHandsFreeMode(); return; }
+  stopWakeRecognition(); // กันซ้อน ถ้าเผลอเรียกฟังก์ชันนี้ซ้ำระหว่างที่ตัวเก่ายังไม่ทันเคลียร์
   setAIStatus('idle','โหมดมือว่าง — เรียก "'+_hfWakeWord+'" เพื่อเริ่มคุย');
   _wakeRecognition=new SR();
   _wakeRecognition.lang='th-TH';
   _wakeRecognition.continuous=true;
   _wakeRecognition.interimResults=false;
   _wakeRecognition.maxAlternatives=1;
-  var handled=false;
   _wakeRecognition.onresult=function(event){
     var lastText=event.results[event.results.length-1][0].transcript||'';
-    if(!handled && lastText.indexOf(_hfWakeWord)>-1){
-      handled=true;
-      try{ _wakeRecognition.stop(); }catch(e){}
-      _wakeRecognition=null;
+    if(lastText.indexOf(_hfWakeWord)>-1){
+      stopWakeRecognition(); // เคลียร์ handler ก่อน ป้องกัน onend restart ตัวเองซ้อนกับ startAIListening() ด้านล่าง
       startAIListening(); // ได้ยินชื่อเรียกแล้ว สลับไปฟังคำสั่งจริงแบบเดียวกับแตะไมค์
     }
   };
   _wakeRecognition.onerror=function(){ /* no-speech/aborted เกิดปกติตอนเงียบ ไม่ต้องแจ้งเตือน แค่ฟังต่อ */ };
   _wakeRecognition.onend=function(){
-    if(_handsFreeOn && !handled) listenForWakeWord(); // ฟังชื่อเรียกต่อไปเรื่อยๆ จนกว่าจะปิดโหมดหรือได้ยินชื่อ
+    if(_handsFreeOn) listenForWakeWord(); // ฟังชื่อเรียกต่อไปเรื่อยๆ จนกว่าจะปิดโหมดหรือได้ยินชื่อ
   };
   try{ _wakeRecognition.start(); }catch(e){}
 }
@@ -5814,9 +5827,16 @@ function getAIPersona(){ return load(aiPersonaKey(),''); }
 function openAIPersonaModal(){
   var input=document.getElementById('ai-persona-input');
   if(input) input.value=getAIPersona();
+  // หยุดการฟัง/พูดชั่วคราวตอนเปิดกล่องนี้ กันชนกับโหมดมือว่าง/การฟังที่อาจทำงานอยู่เบื้องหลัง
+  stopAIListening();
+  stopWakeRecognition();
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
   document.getElementById('modal-ai-persona').classList.add('open');
 }
-function closeAIPersonaModal(){ document.getElementById('modal-ai-persona').classList.remove('open'); }
+function closeAIPersonaModal(){
+  document.getElementById('modal-ai-persona').classList.remove('open');
+  resumeWakeListeningIfNeeded(); // กลับไปฟังชื่อเรียกต่อถ้ายังเปิดโหมดมือว่างค้างอยู่
+}
 function closeAIPersonaOutside(e){ if(e.target===e.currentTarget) closeAIPersonaModal(); }
 function saveAIPersona(){
   var input=document.getElementById('ai-persona-input');
