@@ -643,6 +643,8 @@
     .cb-cancel:hover{background:var(--bg-card-h)}
     .cb-danger{background:var(--red);color:white}
     .cb-danger:hover{opacity:.9}
+    .cb-primary{background:linear-gradient(135deg,var(--purple-mid),var(--pink));color:white}
+    .cb-primary:hover{opacity:.9}
 
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
@@ -1453,7 +1455,7 @@
         <h3 style="font-family:'Nunito',sans-serif;font-size:1.15rem;font-weight:800;margin-bottom:8px" id="confirm-title"></h3>
         <p id="confirm-msg"></p>
         <div class="confirm-btns">
-          <button class="cb-cancel" onclick="closeConfirm()">ยกเลิก</button>
+          <button class="cb-cancel" onclick="handleConfirmCancel()">ยกเลิก</button>
           <button class="cb-danger" id="confirm-action">ยืนยัน</button>
         </div>
       </div>
@@ -1771,6 +1773,7 @@
         <div class="ai-status-dot" id="ai-status-dot"></div>
         <div class="ai-status-text" id="ai-status-text">พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)</div>
       </div>
+      <div id="ai-error-note" style="display:none;font-size:.68rem;color:var(--red);text-align:center;margin-top:4px"></div>
       <div id="ai-reply-box" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:.78rem;color:var(--fg);line-height:1.5;max-height:120px;overflow-y:auto"></div>
       <div id="ai-replay-row" style="display:none;text-align:center;margin-top:6px">
         <button type="button" onclick="replayLastAIReply()" style="background:none;border:none;color:var(--purple-mid);font-size:.72rem;text-decoration:underline;padding:4px">🔊 ฟังอีกครั้ง</button>
@@ -2224,21 +2227,27 @@ function linkWalletToSession() {
   } else if (members.length === 0) {
     // ยังไม่มีครอบครัวเลย และ user กด connect จาก welcome screen
     // กันเคสสร้างครอบครัวซ้ำโดยไม่ตั้งใจ (เช่น เคยมีรหัสครอบครัวอยู่แล้วแต่ storage เพิ่งถูกล้าง) — ถามยืนยันก่อนเสมอ
-    if (!confirm('คุณมีรหัสครอบครัว (Family Code) อยู่แล้วจากก่อนหน้านี้หรือไม่?\n\nกด "ตกลง" ถ้ายังไม่มี จะสร้างครอบครัวใหม่ให้\nกด "ยกเลิก" ถ้ามีรหัสอยู่แล้ว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)')) {
-      openJoinFamily();
-      return;
-    }
-    var fName = (document.getElementById('w-family') && document.getElementById('w-family').value.trim()) || 'ครอบครัวของฉัน';
-    var mName = (document.getElementById('w-name') && document.getElementById('w-name').value.trim()) || 'เจ้าของกระเป๋า';
-    var memberId = uid();
-    var famCode = genFamilyCode();
-    save(KEYS.family, { name: fName, created: Date.now(), code: famCode });
-    save(KEYS.members, [{ id: memberId, name: mName, role: ROLES[0], color: COLORS[0], pin: '0000', walletAddress: connectedWalletAddress, createdAt: Date.now() }]);
-    save(KEYS.accounts, {}); save(KEYS.tx, []); save(KEYS.current, memberId);
-    state.currentUserId = memberId;
-    pushFamilyToCloud();
-    navigate('main');
-    setTimeout(startAutoRefresh, 800);
+    showAppConfirm({
+      title: 'มีรหัสครอบครัวอยู่แล้วหรือไม่?',
+      message: 'กด "สร้างครอบครัวใหม่" ถ้ายังไม่มี\nกด "มีรหัสอยู่แล้ว" ถ้าเคยมีรหัสครอบครัว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)',
+      confirmLabel: 'สร้างครอบครัวใหม่',
+      cancelLabel: 'มีรหัสอยู่แล้ว',
+      danger: false,
+      onCancel: function(){ openJoinFamily(); },
+      onConfirm: function(){
+        var fName = (document.getElementById('w-family') && document.getElementById('w-family').value.trim()) || 'ครอบครัวของฉัน';
+        var mName = (document.getElementById('w-name') && document.getElementById('w-name').value.trim()) || 'เจ้าของกระเป๋า';
+        var memberId = uid();
+        var famCode = genFamilyCode();
+        save(KEYS.family, { name: fName, created: Date.now(), code: famCode });
+        save(KEYS.members, [{ id: memberId, name: mName, role: ROLES[0], color: COLORS[0], pin: '0000', walletAddress: connectedWalletAddress, createdAt: Date.now() }]);
+        save(KEYS.accounts, {}); save(KEYS.tx, []); save(KEYS.current, memberId);
+        state.currentUserId = memberId;
+        pushFamilyToCloud();
+        navigate('main');
+        setTimeout(startAutoRefresh, 800);
+      }
+    });
   } else {
     // มีครอบครัวแต่ยังไม่ได้เลือก profile → ไปหน้า login ให้เลือก แล้ว wallet จะถูกผูกหลังเลือก
     // เก็บ address ไว้ใน session ก่อน จะผูกตอน login
@@ -2529,9 +2538,13 @@ function ensureDisconnectItem() {
 function handleWalletMenuClick() {
   var m = getCurrentMember();
   if (m && m.walletAddress && connectedWalletAddress) {
-    if (confirm('เปลี่ยนกระเป๋าที่เชื่อมต่อ?\nปัจจุบัน: ' + shortenAddr(m.walletAddress))) {
-      connectBitgetWallet();
-    }
+    showAppConfirm({
+      title: 'เปลี่ยนกระเป๋าที่เชื่อมต่อ?',
+      message: 'ปัจจุบัน: ' + shortenAddr(m.walletAddress),
+      confirmLabel: 'เปลี่ยนกระเป๋า',
+      danger: false,
+      onConfirm: function(){ connectBitgetWallet(); }
+    });
   } else {
     requireWallet('ผูกกระเป๋า', function(){ showWalletInProfile(); renderMain(); });
   }
@@ -2541,28 +2554,33 @@ function handleWalletMenuClick() {
 function disconnectWalletOnly() {
   var m = getCurrentMember();
   if (!m) return;
-  if (!confirm('ตัดการเชื่อมต่อ Wallet ออกจากบัญชี "' + m.name + '"?\nคุณจะไม่สามารถเติมเงินหรือโอนเงินได้จนกว่าจะเชื่อมต่อ Wallet ใหม่')) return;
+  showAppConfirm({
+    title: 'ตัดการเชื่อมต่อ Wallet?',
+    message: 'ออกจากบัญชี "' + m.name + '"\nคุณจะไม่สามารถเติมเงินหรือโอนเงินได้จนกว่าจะเชื่อมต่อ Wallet ใหม่',
+    confirmLabel: 'ตัดการเชื่อมต่อ',
+    onConfirm: function(){
+      var members = getMembers();
+      var idx = members.findIndex(function(mm){ return mm.id === m.id; });
+      if (idx >= 0) { delete members[idx].walletAddress; save(KEYS.members, members); }
 
-  var members = getMembers();
-  var idx = members.findIndex(function(mm){ return mm.id === m.id; });
-  if (idx >= 0) { delete members[idx].walletAddress; save(KEYS.members, members); }
+      // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา (ครอบ try/catch กันบาง wallet โยน error แบบ sync)
+      try {
+        if (_activeRawProvider && _activeRawProvider.removeListener) {
+          if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
+          if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+        }
+      } catch (e) { console.warn('removeListener error (ไม่กระทบการตัดการเชื่อมต่อ)', e); }
+      _activeRawProvider = null; _onAccountsChangedHandler = null; _onChainChangedHandler = null;
 
-  // ถอด listener เก่าออกจาก provider ก่อน กันค้างจนรอบเชื่อมต่อถัดไปมีปัญหา (ครอบ try/catch กันบาง wallet โยน error แบบ sync)
-  try {
-    if (_activeRawProvider && _activeRawProvider.removeListener) {
-      if (_onAccountsChangedHandler) _activeRawProvider.removeListener('accountsChanged', _onAccountsChangedHandler);
-      if (_onChainChangedHandler) _activeRawProvider.removeListener('chainChanged', _onChainChangedHandler);
+      connectedWalletAddress = null;
+      web3Provider = null; web3Signer = null; usdcContract = null;
+      stopAutoRefresh();
+
+      showWalletInProfile();
+      renderMain();
+      toast('info', 'ตัดการเชื่อมต่อ Wallet แล้ว');
     }
-  } catch (e) { console.warn('removeListener error (ไม่กระทบการตัดการเชื่อมต่อ)', e); }
-  _activeRawProvider = null; _onAccountsChangedHandler = null; _onChainChangedHandler = null;
-
-  connectedWalletAddress = null;
-  web3Provider = null; web3Signer = null; usdcContract = null;
-  stopAutoRefresh();
-
-  showWalletInProfile();
-  renderMain();
-  toast('info', 'ตัดการเชื่อมต่อ Wallet แล้ว');
+  });
 }
 
 // ============================================================
@@ -2667,19 +2685,25 @@ function createFamily() {
   if(!mName){toast('error','กรุณาใส่ชื่อของคุณ');return;}
   if(!/^\d{4}$/.test(mPin)){toast('error','PIN ต้องเป็นตัวเลข 4 หลัก');return;}
   // กันสร้างครอบครัวซ้ำซ้อนโดยไม่ตั้งใจ (เช่น เคยมีรหัสครอบครัวอยู่แล้วแต่ storage เพิ่งถูกล้าง) — ถามยืนยันก่อนเสมอ
-  if (!confirm('คุณมีรหัสครอบครัว (Family Code) อยู่แล้วจากก่อนหน้านี้หรือไม่?\n\nกด "ตกลง" ถ้ายังไม่มี จะสร้างครอบครัวใหม่ให้\nกด "ยกเลิก" ถ้ามีรหัสอยู่แล้ว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)')) {
-    openJoinFamily();
-    return;
-  }
-  var memberId=uid();
-  var famCode=genFamilyCode();
-  save(KEYS.family,{name:fName,created:Date.now(),code:famCode});
-  save(KEYS.members,[{id:memberId,name:mName,role:ROLES[0],color:COLORS[0],pin:mPin,createdAt:Date.now()}]);
-  save(KEYS.accounts,{[memberId]:{balance:0}});
-  save(KEYS.tx,[]);
-  pushFamilyToCloud();
-  toast('success','สร้าง '+fName+' สำเร็จแล้ว (รหัสครอบครัว: '+famCode+')');
-  showLogin();
+  showAppConfirm({
+    title: 'มีรหัสครอบครัวอยู่แล้วหรือไม่?',
+    message: 'กด "สร้างครอบครัวใหม่" ถ้ายังไม่มี\nกด "มีรหัสอยู่แล้ว" ถ้าเคยมีรหัสครอบครัว จะพาไปหน้ากรอกรหัสเข้าร่วมแทน (กันสร้างซ้ำซ้อน)',
+    confirmLabel: 'สร้างครอบครัวใหม่',
+    cancelLabel: 'มีรหัสอยู่แล้ว',
+    danger: false,
+    onCancel: function(){ openJoinFamily(); },
+    onConfirm: function(){
+      var memberId=uid();
+      var famCode=genFamilyCode();
+      save(KEYS.family,{name:fName,created:Date.now(),code:famCode});
+      save(KEYS.members,[{id:memberId,name:mName,role:ROLES[0],color:COLORS[0],pin:mPin,createdAt:Date.now()}]);
+      save(KEYS.accounts,{[memberId]:{balance:0}});
+      save(KEYS.tx,[]);
+      pushFamilyToCloud();
+      toast('success','สร้าง '+fName+' สำเร็จแล้ว (รหัสครอบครัว: '+famCode+')');
+      showLogin();
+    }
+  });
 }
 
 // ============================================================
@@ -3006,12 +3030,18 @@ function renderMain(){
 }
 
 function deleteTransaction(txId){
-  if(!confirm('ลบธุรกรรมนี้ออกจากประวัติ? (ลบแล้วกู้คืนไม่ได้ และไม่กระทบยอดเงินจริง เป็นแค่การลบบันทึกออกจากประวัติเท่านั้น)')) return;
-  var txs=load(KEYS.tx,[]).filter(function(t){return t.id!==txId;});
-  save(KEYS.tx,txs);
-  renderMain();
-  renderHistory();
-  toast('success','ลบธุรกรรมออกจากประวัติแล้ว');
+  showAppConfirm({
+    title: 'ลบธุรกรรมนี้?',
+    message: 'ลบแล้วกู้คืนไม่ได้ และไม่กระทบยอดเงินจริง เป็นแค่การลบบันทึกออกจากประวัติเท่านั้น',
+    confirmLabel: 'ลบธุรกรรม',
+    onConfirm: function(){
+      var txs=load(KEYS.tx,[]).filter(function(t){return t.id!==txId;});
+      save(KEYS.tx,txs);
+      renderMain();
+      renderHistory();
+      toast('success','ลบธุรกรรมออกจากประวัติแล้ว');
+    }
+  });
 }
 function animateBalance(target){
   var display=document.getElementById('balanceDisplay');
@@ -3862,6 +3892,38 @@ function confirmLogout(){
   document.getElementById('modal-confirm').classList.add('open');
 }
 function closeConfirm(){document.getElementById('modal-confirm').classList.remove('open');}
+var _appConfirmOnCancel=null;
+function handleConfirmCancel(){
+  var cb=_appConfirmOnCancel; _appConfirmOnCancel=null;
+  closeConfirm();
+  if(cb) cb();
+}
+/** กล่องยืนยันแบบสวยงามของแอป ใช้แทน window.confirm() ของเบราว์เซอร์ทั้งหมด
+ * opts: {title, message, confirmLabel, cancelLabel, danger(=true ปุ่มยืนยันสีแดง, false=สีม่วง), onConfirm, onCancel, iconSvg}
+ * รองรับ \n ขึ้นบรรทัดใหม่ใน message ได้ */
+function showAppConfirm(opts){
+  opts = opts || {};
+  var defaultDangerIcon='<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+  var defaultNeutralIcon='<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--purple-mid)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+  var isDanger = opts.danger!==false;
+  document.getElementById('confirm-icon').innerHTML = opts.iconSvg || (isDanger?defaultDangerIcon:defaultNeutralIcon);
+  document.getElementById('confirm-title').textContent = opts.title || 'ยืนยันการทำรายการ';
+  var msgEl=document.getElementById('confirm-msg');
+  msgEl.textContent = opts.message || '';
+  msgEl.style.whiteSpace='pre-line';
+  var cancelBtn=document.querySelector('#modal-confirm .cb-cancel');
+  if(cancelBtn) cancelBtn.textContent = opts.cancelLabel || 'ยกเลิก';
+  var actionBtn=document.getElementById('confirm-action');
+  actionBtn.textContent = opts.confirmLabel || 'ยืนยัน';
+  actionBtn.className = isDanger ? 'cb-danger' : 'cb-primary';
+  _appConfirmOnCancel = opts.onCancel || null;
+  actionBtn.onclick=function(){
+    _appConfirmOnCancel=null;
+    closeConfirm();
+    if(opts.onConfirm) opts.onConfirm();
+  };
+  document.getElementById('modal-confirm').classList.add('open');
+}
 
 function confirmResetApp(){
   document.getElementById('confirm-icon').innerHTML='<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
@@ -5491,12 +5553,8 @@ function openAIAssistant(){
   loadAIFacts();
   loadAIFacesList();
   document.getElementById('modal-ai-assistant').classList.add('open');
-  if(isLikelyWalletInAppBrowser()){
-    setAIStatus('idle','⚠️ กำลังเปิดในเบราว์เซอร์แอปกระเป๋า — กล้อง/ไมค์อาจใช้ไม่ได้ แนะนำเปิดผ่าน Chrome/Safari แทน');
-    toast('error','เบราว์เซอร์นี้อาจบล็อกกล้อง/ไมค์ — แนะนำเปิดผ่าน Chrome หรือ Safari');
-  } else {
-    setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-  }
+  hideAIErrorNote();
+  setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
 }
 function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
 function closeAIAssistant(){
@@ -5512,7 +5570,7 @@ function toggleAIVision(){
 }
 function startAICamera(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    toast('error','เบราว์เซอร์นี้ไม่รองรับกล้อง'); return;
+    showAIErrorNote('เบราว์เซอร์นี้ไม่รองรับกล้อง'); return;
   }
   navigator.mediaDevices.getUserMedia({video:{facingMode:_aiCamFacing}, audio:false}).then(function(stream){
     _aiCamStream=stream; _aiVisionOn=true;
@@ -5523,7 +5581,7 @@ function startAICamera(){
     var flipBtn=document.getElementById('ai-cam-flip'); if(flipBtn) flipBtn.style.display='flex';
     loadFaceApiModels(); // เริ่มโหลดล่วงหน้าตั้งแต่เปิดกล้อง จะได้พร้อมใช้ตอนคุยจริง
   }).catch(function(err){
-    toast('error','เปิดกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
+    showAIErrorNote('เปิดกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
   });
 }
 function stopAICamera(){
@@ -5550,7 +5608,7 @@ function flipAICamera(){
       video.srcObject=stream;
       video.style.transform = (newFacing==='user') ? 'scaleX(-1)' : 'none';
     }).catch(function(err){
-      toast('error','สลับกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
+      showAIErrorNote('สลับกล้องไม่สำเร็จ: '+(err&&err.message?err.message:err));
       // สลับไม่สำเร็จ กลับไปเปิดกล้องเดิมแทน (ไม่เปลี่ยน _aiCamFacing)
       startAICamera();
     });
@@ -5590,6 +5648,19 @@ function setAIStatus(stateName,text){
 var _aiConversationActive=false; // true = อยู่ระหว่างบทสนทนาต่อเนื่อง (แตะไมค์ครั้งเดียวค้างไว้ จนกว่าจะพูด "ขอบคุณ" หรือแตะซ้ำ)
 var AI_STOP_PHRASE='ขอบคุณ';
 
+/** ป้ายเตือนเล็กๆ ใต้กล่องสถานะ ผู้ช่วย AI — ใช้แทน toast ลอยสำหรับ error เฉพาะจุดของหน้านี้
+ * โชว์เฉพาะตอนมี error จริงๆ เท่านั้น ไม่โชว์ล่วงหน้าแบบเดา และหายไปเองตอนเริ่มฟังใหม่ */
+function showAIErrorNote(msg){
+  var note=document.getElementById('ai-error-note');
+  if(!note) return;
+  note.textContent=msg;
+  note.style.display='block';
+}
+function hideAIErrorNote(){
+  var note=document.getElementById('ai-error-note');
+  if(note) note.style.display='none';
+}
+
 function onAIMicClick(){
   if(aiAgentState==='listening' || aiAgentState==='thinking' || aiAgentState==='speaking'){
     // แตะซ้ำระหว่างสนทนา = ยกเลิก/จบการสนทนาทันที (ไม่ต้องรอพูด "ขอบคุณ")
@@ -5620,26 +5691,14 @@ var _speechPrimed=false;
 
 function startAIListening(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ toast('error','เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  if(!SR){ showAIErrorNote('เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+  hideAIErrorNote();
   var replyBox=document.getElementById('ai-reply-box');
   if(replyBox) replyBox.style.display='none';
   var replayRow=document.getElementById('ai-replay-row');
   if(replayRow) replayRow.style.display='none';
   setAIStatus('listening','กำลังฟัง...');
-  // ขอสิทธิ์ไมค์ให้ชัดเจนก่อนเริ่ม SpeechRecognition เสมอ — ถ้าปล่อยให้ SpeechRecognition.start()
-  // ขอสิทธิ์เองตอนแตะไมค์ครั้งแรก บางเครื่อง/บางเบราว์เซอร์จะฟังไม่ทัน/ค้างเงียบ ต้องแตะซ้ำรอบสองถึงจะติด
-  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
-      stream.getTracks().forEach(function(t){ t.stop(); }); // ขอสิทธิ์เฉยๆ ไม่ต้องใช้ stream นี้จริง (SpeechRecognition จัดการเสียงของมันเอง)
-      reallyStartAIRecognition(SR);
-    }).catch(function(){
-      toast('error','กรุณาอนุญาตใช้ไมโครโฟนก่อน แล้วแตะไมค์อีกครั้ง');
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-      _aiConversationActive=false;
-    });
-  } else {
-    reallyStartAIRecognition(SR);
-  }
+  reallyStartAIRecognition(SR);
 }
 function reallyStartAIRecognition(SR){
   _aiRecognition=new SR();
@@ -5652,13 +5711,12 @@ function reallyStartAIRecognition(SR){
       if(text.indexOf(AI_STOP_PHRASE)>-1){
         _aiConversationActive=false;
         setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-        toast('info','จบการสนทนาแล้วค่ะ');
         return;
       }
       processAIUserInput(text);
     }catch(e){
       console.warn('[onresult error]',e);
-      toast('error','เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
+      showAIErrorNote('เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
       setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
       _aiConversationActive=false;
     }
@@ -5674,7 +5732,7 @@ function reallyStartAIRecognition(SR){
       'aborted':'การฟังถูกยกเลิกกลางคัน'
     };
     setAIStatus('idle', (msgMap[reason]||('ฟังไม่สำเร็จ ('+reason+')')) + ' — แตะไมค์เพื่อลองใหม่');
-    toast('error','ผู้ช่วย AI ฟังไม่สำเร็จ: '+reason);
+    showAIErrorNote('ผู้ช่วย AI ฟังไม่สำเร็จ: '+reason);
     _aiConversationActive=false;
   };
   _aiRecognition.onend=function(){
@@ -5762,7 +5820,7 @@ function processAIUserInput(userText){
   });
 
   Promise.race([workPromise, timeoutPromise]).catch(function(err){
-    toast('error','ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
+    showAIErrorNote('ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
     setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
     continueConversationIfActive();
   });
@@ -5850,7 +5908,7 @@ function showAIReplyText(text){
 function replayLastAIReply(){
   if(!_lastAIReplyText) return;
   if(speakViaNativeBridge(_lastAIReplyText)) return;
-  if(!window.speechSynthesis){ toast('error','เบราว์เซอร์นี้ไม่รองรับการพูดออกเสียง — ต้องเชื่อมสะพาน native TTS ในแอปก่อน'); return; }
+  if(!window.speechSynthesis){ showAIErrorNote('เบราว์เซอร์นี้ไม่รองรับการพูดออกเสียง — ต้องเชื่อมสะพาน native TTS ในแอปก่อน'); return; }
   var utter=new SpeechSynthesisUtterance(_lastAIReplyText);
   utter.lang='th-TH';
   var v=pickThaiVoice();
@@ -6900,18 +6958,24 @@ function renderMissionRun(){
 }
 function resetRunData(){
   var member=getCurrentMember(); if(!member) return;
-  if(!confirm('ยืนยันล้างประวัติการวิ่งทั้งหมดของ '+member.name+' (ระยะทาง, ก้าว, เส้นทาง, สถิติ 7 วันติด) ใช่หรือไม่?\n(รางวัลที่เคยได้รับไปแล้วจะไม่ถูกลบ)')) return;
-  if(missionRun.watching){
-    navigator.geolocation.clearWatch(missionRun.watchId);
-    clearInterval(missionRun.timerInterval);
-    if(missionRun.motionHandler){ window.removeEventListener('devicemotion', missionRun.motionHandler); missionRun.motionHandler=null; }
-    missionRun.watching=false;
-  }
-  var m=getMissions();
-  m.runSessions = m.runSessions.filter(function(s){return s.memberId!==member.id;});
-  saveMissions(m);
-  toast('success','ล้างประวัติการวิ่งแล้ว');
-  renderMissionRun();
+  showAppConfirm({
+    title: 'ล้างประวัติการวิ่ง?',
+    message: 'ล้างประวัติการวิ่งทั้งหมดของ '+member.name+' (ระยะทาง, ก้าว, เส้นทาง, สถิติ 7 วันติด)\n(รางวัลที่เคยได้รับไปแล้วจะไม่ถูกลบ)',
+    confirmLabel: 'ล้างประวัติ',
+    onConfirm: function(){
+      if(missionRun.watching){
+        navigator.geolocation.clearWatch(missionRun.watchId);
+        clearInterval(missionRun.timerInterval);
+        if(missionRun.motionHandler){ window.removeEventListener('devicemotion', missionRun.motionHandler); missionRun.motionHandler=null; }
+        missionRun.watching=false;
+      }
+      var m=getMissions();
+      m.runSessions = m.runSessions.filter(function(s){return s.memberId!==member.id;});
+      saveMissions(m);
+      toast('success','ล้างประวัติการวิ่งแล้ว');
+      renderMissionRun();
+    }
+  });
 }
 function formatRunDuration(sec){
   var m2=Math.floor(sec/60), s2=sec%60;
@@ -7034,18 +7098,25 @@ function payMissionClaim(claimId){
   if(!member){toast('error','ไม่พบสมาชิก');return;}
   if(!connectedWalletAddress){toast('error','กรุณาเชื่อมต่อ Wallet ของเจ้าบ้านก่อนจ่ายรางวัล');return;}
   if(!member.walletAddress){toast('error',member.name+' ยังไม่ได้ผูก Wallet — ไม่สามารถจ่ายรางวัลได้');return;}
-  if(!confirm('ยืนยันจ่าย '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำหรับ "'+claim.label+'" ใช่หรือไม่?')) return;
-  toast('info','กำลังส่งธุรกรรม...');
-  sendOnchainUSDC(member.walletAddress, claim.amount).then(function(tx){
-    return (tx && tx.wait) ? tx.wait() : tx;
-  }).then(function(){
-    addTransaction(state.currentUserId, member.id, claim.amount, '🪙 รางวัลภารกิจ: '+claim.label, '', 'รางวัลภารกิจ', '');
-    m.claims = m.claims.filter(function(c){return c.id!==claimId;}); // จ่ายแล้วไม่เก็บซ้ำ ข้อมูลอยู่ในประวัติธุรกรรมแล้ว
-    saveMissions(m);
-    toast('success','จ่ายรางวัล '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำเร็จ!');
-    renderMissionClaims();
-  }).catch(function(err){
-    toast('error','จ่ายรางวัลไม่สำเร็จ: '+(err&&err.message?err.message:err));
+  showAppConfirm({
+    title: 'ยืนยันจ่ายรางวัล?',
+    message: 'จ่าย '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำหรับ "'+claim.label+'"',
+    confirmLabel: 'จ่ายรางวัล',
+    danger: false,
+    onConfirm: function(){
+      toast('info','กำลังส่งธุรกรรม...');
+      sendOnchainUSDC(member.walletAddress, claim.amount).then(function(tx){
+        return (tx && tx.wait) ? tx.wait() : tx;
+      }).then(function(){
+        addTransaction(state.currentUserId, member.id, claim.amount, '🪙 รางวัลภารกิจ: '+claim.label, '', 'รางวัลภารกิจ', '');
+        m.claims = m.claims.filter(function(c){return c.id!==claimId;}); // จ่ายแล้วไม่เก็บซ้ำ ข้อมูลอยู่ในประวัติธุรกรรมแล้ว
+        saveMissions(m);
+        toast('success','จ่ายรางวัล '+claim.amount.toFixed(2)+' USDC ให้ '+member.name+' สำเร็จ!');
+        renderMissionClaims();
+      }).catch(function(err){
+        toast('error','จ่ายรางวัลไม่สำเร็จ: '+(err&&err.message?err.message:err));
+      });
+    }
   });
 }
 
