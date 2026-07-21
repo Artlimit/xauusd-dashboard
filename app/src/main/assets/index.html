@@ -5743,9 +5743,15 @@ function reallyStartAIRecognition(SR){
 function stopAIListening(){
   if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
 }
-/** เรียกหลังคุยจบรอบหนึ่ง (AI พูดจบ/ผิดพลาด) — ถ้ายังอยู่ระหว่างบทสนทนา (ยังไม่พูด "ขอบคุณ"/ยังไม่แตะไมค์ปิดเอง) ให้ฟังต่ออัตโนมัติ ไม่ต้องแตะไมค์ใหม่ทุกครั้ง */
+/** เรียกหลังคุยจบรอบหนึ่ง (AI พูดจบ/ผิดพลาด) — ถ้ายังอยู่ระหว่างบทสนทนา (ยังไม่พูด "ขอบคุณ"/ยังไม่แตะไมค์ปิดเอง) ให้ฟังต่ออัตโนมัติ ไม่ต้องแตะไมค์ใหม่ทุกครั้ง
+ * หน่วงเวลาสั้นๆ ก่อนเปิดไมค์ เพราะพอ TTS พูดจบปุ๊บ ระบบเสียงของ Android ต้องใช้เวลาสั้นๆ "ปล่อย" ลำโพง/audio focus ก่อน
+ * ถ้าเปิดไมค์ทันทีในจังหวะนั้น ไมค์จะแย่งจับสัญญาณเร็วเกินไปจนไม่ได้เสียงอะไรเลย แล้วปิดตัวเองทันที (อาการ "เด้งแป๊บเดียว") */
 function continueConversationIfActive(){
-  if(_aiConversationActive) startAIListening();
+  if(!_aiConversationActive) return;
+  setAIStatus('idle','กำลังเตรียมฟัง...');
+  setTimeout(function(){
+    if(_aiConversationActive) startAIListening();
+  }, 500);
 }
 
 // ============================================================
