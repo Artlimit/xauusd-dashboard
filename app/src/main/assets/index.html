@@ -5663,15 +5663,13 @@ function hideAIErrorNote(){
 
 function onAIMicClick(){
   if(aiAgentState==='listening' || aiAgentState==='thinking' || aiAgentState==='speaking'){
-    // แตะซ้ำระหว่างสนทนา = ยกเลิก/จบการสนทนาทันที (ไม่ต้องรอพูด "ขอบคุณ")
-    _aiConversationActive=false;
-    stopAIListening();
-    if(window.speechSynthesis) window.speechSynthesis.cancel();
-    setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
+    // ระหว่างสนทนาอยู่ ไม่มีการยกเลิกด้วยการแตะไมค์ซ้ำ — จบสนทนาได้ทางเดียวคือพูดคำว่า "ขอบคุณ" เท่านั้น
+    // แตะซ้ำตอนนี้จะไม่มีผลอะไร (กันแตะโดนโดยไม่ตั้งใจแล้วสนทนาหลุดกลางคัน)
     return;
   }
   primeSpeechSynthesis(); // ต้องเรียกตรงนี้แบบ sync ในตัว handler ของการแตะจริงๆ ไม่งั้นบาง browser (เช่น Safari มือถือ) จะเงียบเสียงตอนพูดจริงทีหลัง
   _aiConversationActive=true;
+  _aiListenAttempt=0; // แตะเริ่มเองใหม่ทุกครั้ง รีเซ็ตตัวนับ retry
   startAIListening();
 }
 
@@ -5689,6 +5687,9 @@ function primeSpeechSynthesis(){
 }
 var _speechPrimed=false;
 
+var _aiListenAttempt=0; // นับจำนวนครั้งที่ auto-retry เปิดไมค์ติดต่อกัน ใช้คำนวณ backoff เท่านั้น ไม่ใช้จำกัดจำนวนครั้งอีกต่อไป
+var AI_RETRY_BACKOFF_CAP_MS=5000; // เพดานเวลาหน่วงสูงสุดต่อครั้ง กันรัว retry ถี่เกินไปจนกินแบตเตอรี่ ถ้า error ซ้ำต่อเนื่องนานๆ
+
 function startAIListening(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ showAIErrorNote('เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
@@ -5705,8 +5706,22 @@ function reallyStartAIRecognition(SR){
   _aiRecognition.lang='th-TH';
   _aiRecognition.interimResults=false;
   _aiRecognition.maxAlternatives=1;
+  var gotResult=false;
+  var errorHandled=false;
+
+  function retryListenSoon(){
+    _aiListenAttempt++;
+    setAIStatus('listening','กำลังฟัง...');
+    var delay=Math.min(400 + _aiListenAttempt*300, AI_RETRY_BACKOFF_CAP_MS);
+    setTimeout(function(){
+      if(_aiConversationActive) startAIListening();
+    }, delay);
+  }
+
   _aiRecognition.onresult=function(event){
     try{
+      gotResult=true;
+      _aiListenAttempt=0; // ได้ยินเสียงจริงแล้ว รีเซ็ตตัวนับ backoff
       var text=event.results[0][0].transcript;
       if(text.indexOf(AI_STOP_PHRASE)>-1){
         _aiConversationActive=false;
@@ -5715,43 +5730,55 @@ function reallyStartAIRecognition(SR){
       }
       processAIUserInput(text);
     }catch(e){
+      // ข้อผิดพลาดระหว่างประมวลผลคำพูด — แจ้งให้เห็นเฉยๆ แต่ไม่จบสนทนา จะพูด "ขอบคุณ" เท่านั้นถึงจะจบได้จริง
       console.warn('[onresult error]',e);
       showAIErrorNote('เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
-      setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
-      _aiConversationActive=false;
+      retryListenSoon();
     }
   };
   _aiRecognition.onerror=function(event){
     var reason=event&&event.error?event.error:'ไม่ทราบสาเหตุ';
     console.warn('[AI mic error]', reason, event);
+    errorHandled=true;
     var msgMap={
-      'not-allowed':'ไม่ได้รับสิทธิ์ไมค์ — เช็คการอนุญาตไมค์ของเบราว์เซอร์ให้เว็บนี้',
-      'audio-capture':'หาไมค์ไม่เจอ หรือไมค์ถูกแอปอื่นใช้งานอยู่',
-      'no-speech':'ไม่ได้ยินเสียงพูด ลองพูดใหม่อีกครั้ง',
-      'network':'เน็ตหลุดระหว่างฟังเสียง',
+      'not-allowed':'ไม่ได้รับสิทธิ์ไมค์ — เช็คการอนุญาตไมค์ของเบราว์เซอร์ให้เว็บนี้ (จะลองฟังต่ออัตโนมัติ)',
+      'audio-capture':'หาไมค์ไม่เจอ หรือไมค์ถูกแอปอื่นใช้งานอยู่ (จะลองฟังต่ออัตโนมัติ)',
+      'no-speech':'ไม่ได้ยินเสียงพูด',
+      'network':'เน็ตหลุดระหว่างฟังเสียง (จะลองฟังต่ออัตโนมัติ)',
       'aborted':'การฟังถูกยกเลิกกลางคัน'
     };
-    setAIStatus('idle', (msgMap[reason]||('ฟังไม่สำเร็จ ('+reason+')')) + ' — แตะไมค์เพื่อลองใหม่');
-    showAIErrorNote('ผู้ช่วย AI ฟังไม่สำเร็จ: '+reason);
-    _aiConversationActive=false;
+    // ไม่จบสนทนาอีกต่อไปไม่ว่า error จะเป็นอะไรก็ตาม — จบได้ทางเดียวคือพูด "ขอบคุณ" เท่านั้น
+    // แสดงข้อความไว้ให้เห็นเฉยๆ (เฉพาะ error ที่ไม่ใช่แค่เงียบธรรมดา) แล้วลองฟังใหม่ต่อเรื่อยๆ
+    if(reason!=='no-speech' && reason!=='aborted'){
+      showAIErrorNote('ผู้ช่วย AI ฟังไม่สำเร็จ: '+(msgMap[reason]||reason));
+    }
+    if(_aiConversationActive) retryListenSoon();
   };
   _aiRecognition.onend=function(){
+    if(errorHandled) return; // onerror จัดการ (รวมถึง retry) ไปแล้ว ไม่ต้องทำซ้ำตรงนี้
+    if(!gotResult && _aiConversationActive){
+      // จบเงียบๆ โดยไม่มี error event และไม่มีเสียงเข้าเลย — ลองฟังต่อ ไม่จบสนทนา
+      retryListenSoon();
+      return;
+    }
     if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
   };
-  try{ _aiRecognition.start(); }catch(e){ setAIStatus('idle','เริ่มฟังไม่สำเร็จ'); _aiConversationActive=false; }
+  try{ _aiRecognition.start(); }catch(e){ if(_aiConversationActive) retryListenSoon(); }
 }
 function stopAIListening(){
   if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
 }
 /** เรียกหลังคุยจบรอบหนึ่ง (AI พูดจบ/ผิดพลาด) — ถ้ายังอยู่ระหว่างบทสนทนา (ยังไม่พูด "ขอบคุณ"/ยังไม่แตะไมค์ปิดเอง) ให้ฟังต่ออัตโนมัติ ไม่ต้องแตะไมค์ใหม่ทุกครั้ง
  * หน่วงเวลาสั้นๆ ก่อนเปิดไมค์ เพราะพอ TTS พูดจบปุ๊บ ระบบเสียงของ Android ต้องใช้เวลาสั้นๆ "ปล่อย" ลำโพง/audio focus ก่อน
- * ถ้าเปิดไมค์ทันทีในจังหวะนั้น ไมค์จะแย่งจับสัญญาณเร็วเกินไปจนไม่ได้เสียงอะไรเลย แล้วปิดตัวเองทันที (อาการ "เด้งแป๊บเดียว") */
+ * ถ้าเปิดไมค์ทันทีในจังหวะนั้น ไมค์จะแย่งจับสัญญาณเร็วเกินไปจนไม่ได้เสียงอะไรเลย แล้วปิดตัวเองทันที (อาการ "เด้งแป๊บเดียว")
+ * ต่อให้หน่วงแล้วยังชนจังหวะอยู่บ้าง ตัว retry เงียบๆ ใน reallyStartAIRecognition ด้านบนจะรับช่วงลองใหม่ให้เองอีกที */
 function continueConversationIfActive(){
   if(!_aiConversationActive) return;
+  _aiListenAttempt=0; // เริ่มรอบใหม่ นับ retry ใหม่
   setAIStatus('idle','กำลังเตรียมฟัง...');
   setTimeout(function(){
     if(_aiConversationActive) startAIListening();
-  }, 500);
+  }, 700);
 }
 
 // ============================================================
