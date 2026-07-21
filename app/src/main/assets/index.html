@@ -5703,37 +5703,17 @@ function startAIListening(){
 function reallyStartAIRecognition(SR){
   _aiRecognition=new SR();
   _aiRecognition.lang='th-TH';
-  _aiRecognition.continuous=true; // ฟังต่อเนื่อง ไม่ตัดจบทันทีที่หยุดพูดสั้นๆ ครั้งแรก (กันตัดจบกลางประโยคตอนหยุดคิด)
-  _aiRecognition.interimResults=true; // ต้องเปิดไว้เพื่อรู้ว่ายังมีเสียงเข้ามาต่อเนื่อง จะได้รีเซ็ตตัวจับเวลาเงียบ
+  _aiRecognition.interimResults=false;
   _aiRecognition.maxAlternatives=1;
-
-  var finalTranscript='';
-  var silenceTimer=null;
-  var SILENCE_WAIT_MS=1800; // เว้นจังหวะให้พูดต่อได้ ~1.8 วิ ก่อนถือว่าพูดจบจริง
-
-  function finishAndProcess(){
-    clearTimeout(silenceTimer); silenceTimer=null;
-    var text=(finalTranscript||'').trim();
-    try{ _aiRecognition.stop(); }catch(e){}
-    if(!text) return; // เงียบไปเฉยๆ ไม่มีอะไรพูด ปล่อยให้ onend จัดการสถานะ idle เอง
-    if(text.indexOf(AI_STOP_PHRASE)>-1){
-      _aiConversationActive=false;
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-      return;
-    }
-    processAIUserInput(text);
-  }
-
   _aiRecognition.onresult=function(event){
     try{
-      for(var i=event.resultIndex; i<event.results.length; i++){
-        if(event.results[i].isFinal){
-          finalTranscript += event.results[i][0].transcript;
-        }
+      var text=event.results[0][0].transcript;
+      if(text.indexOf(AI_STOP_PHRASE)>-1){
+        _aiConversationActive=false;
+        setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
+        return;
       }
-      // มีเสียงเข้ามาเรื่อยๆ (ไม่ว่า final หรือไม่) แปลว่ายังพูดอยู่ — รีเซ็ตตัวจับเวลาเงียบใหม่ทุกครั้งที่มีเสียง
-      clearTimeout(silenceTimer);
-      silenceTimer=setTimeout(finishAndProcess, SILENCE_WAIT_MS);
+      processAIUserInput(text);
     }catch(e){
       console.warn('[onresult error]',e);
       showAIErrorNote('เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
@@ -5744,12 +5724,6 @@ function reallyStartAIRecognition(SR){
   _aiRecognition.onerror=function(event){
     var reason=event&&event.error?event.error:'ไม่ทราบสาเหตุ';
     console.warn('[AI mic error]', reason, event);
-    clearTimeout(silenceTimer);
-    if(reason==='no-speech' && finalTranscript.trim()){
-      // เคสหายาก: engine ยิง no-speech ทั้งที่จริงมีคำพูดสะสมไว้แล้ว ยังประมวลผลสิ่งที่พูดไปให้ ไม่ทิ้งไปเฉยๆ
-      finishAndProcess();
-      return;
-    }
     var msgMap={
       'not-allowed':'ไม่ได้รับสิทธิ์ไมค์ — เช็คการอนุญาตไมค์ของเบราว์เซอร์ให้เว็บนี้',
       'audio-capture':'หาไมค์ไม่เจอ หรือไมค์ถูกแอปอื่นใช้งานอยู่',
@@ -5762,7 +5736,6 @@ function reallyStartAIRecognition(SR){
     _aiConversationActive=false;
   };
   _aiRecognition.onend=function(){
-    clearTimeout(silenceTimer);
     if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
   };
   try{ _aiRecognition.start(); }catch(e){ setAIStatus('idle','เริ่มฟังไม่สำเร็จ'); _aiConversationActive=false; }
@@ -5955,13 +5928,19 @@ function pickThaiVoice(){
     || voices.find(function(v){return v.lang && v.lang.indexOf('th')===0;})
     || null;
 }
+/** ตั้ง callback ไว้รอรับสัญญาณจริงจากฝั่ง native ว่า TTS พูดจบแล้ว (เรียกจาก MainActivity.kt ผ่าน onDone/onError ของ UtteranceProgressListener)
+ * ใช้แทนการเดาเวลาไว้ล่วงหน้า เพราะความยาวข้อความไม่ได้แปลตรงๆ เป็นระยะเวลาพูดเสมอไป (จังหวะพูด/ภาษา/ความเร็วเสียงต่างกันได้) */
+window.onNativeTTSDone = null;
+
 function speakAIText(text){
   setAIStatus('speaking','กำลังพูด...');
   showAIReplyText(text);
   if(speakViaNativeBridge(text)){
-    // ไม่รู้ระยะเวลาพูดจริงจาก native ฝั่งนี้ ประมาณเวลาไว้คร่าวๆ จากความยาวข้อความแล้วค่อยกลับ idle
-    var estMs=Math.max(1500, Math.min(text.length*70, 15000));
-    setTimeout(function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); continueConversationIfActive(); }, estMs);
+    window.onNativeTTSDone=function(){
+      window.onNativeTTSDone=null;
+      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
+      continueConversationIfActive();
+    };
     return;
   }
   if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); continueConversationIfActive(); return; }
