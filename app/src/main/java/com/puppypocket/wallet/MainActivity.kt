@@ -55,11 +55,44 @@ inner class AndroidDebugBridge {
     }
 
     private fun showDebugDialog(title: String, message: String) {
-        android.app.AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(24), dp(22), dp(24), dp(8))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(20).toFloat()
+                setColor(android.graphics.Color.parseColor("#1E1530"))
+            }
+        }
+        val titleView = android.widget.TextView(this).apply {
+            text = "🐾 $title"
+            setTextColor(android.graphics.Color.parseColor("#F5F0FF"))
+            textSize = 17f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, dp(10))
+        }
+        val messageView = android.widget.TextView(this).apply {
+            text = message
+            setTextColor(android.graphics.Color.parseColor("#C9BFE0"))
+            textSize = 13.5f
+            setPadding(0, 0, 0, dp(6))
+        }
+        container.addView(titleView)
+        container.addView(messageView)
+
+        val dialog = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setView(container)
             .setPositiveButton("ปิด", null)
-            .show()
+            .create()
+        dialog.setOnShowListener {
+            val btn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            btn?.setTextColor(android.graphics.Color.parseColor("#FF7EB9"))
+            btn?.setTypeface(btn.typeface, android.graphics.Typeface.BOLD)
+        }
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.show()
     }
 
     private val requestAndroidPermissions = registerForActivityResult(
@@ -123,6 +156,25 @@ inner class AndroidDebugBridge {
         setContentView(webView)
 
         tts = TextToSpeech(this){ if(it==TextToSpeech.SUCCESS){ tts.language = Locale("th","TH") } }
+        tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                // พูดจบจริงแล้ว (สัญญาณจริงจากระบบ TTS ไม่ใช่การเดาเวลา) แจ้งฝั่งเว็บให้เปิดไมค์/เปลี่ยนสถานะปุ่มต่อได้เลย
+                runOnUiThread {
+                    if (::webView.isInitialized) {
+                        webView.evaluateJavascript("if(window.onNativeTTSDone) window.onNativeTTSDone();", null)
+                    }
+                }
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                runOnUiThread {
+                    if (::webView.isInitialized) {
+                        webView.evaluateJavascript("if(window.onNativeTTSDone) window.onNativeTTSDone();", null)
+                    }
+                }
+            }
+        })
         setupWebView()
 
         webView.loadUrl(puppyPocketUrl)
@@ -176,7 +228,7 @@ inner class AndroidDebugBridge {
 
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
-                // ดักจับ JavaScript error ที่เกิดขึ้นบนหน้าเว็บ แล้วส่งกลับมาที่แอปให้เห็น
+                // ดักจับ JavaScript error ที่เกิดขึ้นบนหน้าเว็บ แล้วส่งกลับมาที่แอปให้เห็น (เฉพาะตอนมี error จริงเท่านั้น)
                 view.evaluateJavascript(
                     """
                     (function() {
@@ -186,9 +238,6 @@ inner class AndroidDebugBridge {
                             }
                             return false;
                         };
-                        if (window.AndroidDebug) {
-                            AndroidDebug.logError('หน้าเว็บโหลดเสร็จแล้ว (ไม่มี error ตอนโหลดเริ่มต้น)');
-                        }
                     })();
                     """.trimIndent(),
                     null
@@ -198,14 +247,14 @@ inner class AndroidDebugBridge {
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
-                    runOnUiThread {
-                        showDebugDialog(
-                            "Console Error",
-                            "${consoleMessage.message()}\n(บรรทัด ${consoleMessage.lineNumber()} ใน ${consoleMessage.sourceId()})"
-                        )
-                    }
-                }
+                // เปลี่ยนจากเด้ง popup ทุก console.error (ซึ่งส่วนใหญ่เป็นแค่ warning ไม่ร้ายแรงจาก SDK ภายนอก
+                // เช่น Coinbase wallet-sdk เช็ค CORS แล้วไม่ผ่านเฉยๆ ไม่กระทบการทำงานจริง)
+                // เป็นการ log ไปที่ Logcat แทน ใครอยากดู error จริงๆ เปิด chrome://inspect ตรวจสอบได้
+                // (WebView.setWebContentsDebuggingEnabled(true) เปิดไว้อยู่แล้วด้านบน)
+                android.util.Log.e(
+                    "PuppyPocketWebView",
+                    "${consoleMessage.message()} (line ${consoleMessage.lineNumber()} @ ${consoleMessage.sourceId()})"
+                )
                 return true
             }
 
