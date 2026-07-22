@@ -19,19 +19,40 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- face-api.js (ใช้สำหรับผู้ช่วย AI จดจำใบหน้า) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/dist/face-api.js"></script>
-  <!-- WalletConnect AppKit (Reown) — ไม่ต้อง bundler -->
-  <!-- ห่อด้วย dynamic import + try/catch ทั้งก้อน: บางครั้งไลบรารีย่อยที่โหลดผ่าน esm.run (เช่น uint8arrays)
-       จะพังหรือโหลดไม่ครบเพราะปัญหาที่ CDN/เครือข่ายฝั่งผู้ใช้ ไม่เกี่ยวกับโค้ดของเรา
-       ถ้าใช้ import แบบ static ตรงๆ เวลาโมดูลย่อยพังจะกลายเป็น uncaught error เด้งเตือนทั้งแอปทันที
-       เปลี่ยนมาใช้ import() แบบ dynamic ในนี้ ครอบ try/catch ได้ ถ้าพังจะแค่ปิดปุ่มเชื่อมต่อ WalletConnect ชั่วคราว
-       ส่วนอื่นของแอป (เอเจนต์ราคา/ผู้ช่วย AI/กระเป๋าครอบครัว ฯลฯ) ยังทำงานได้ปกติ เพราะโค้ดที่ใช้ window._wcModal/_wcReconnect เช็ค if(...) ก่อนใช้อยู่แล้ว -->
+  <!-- WalletConnect AppKit (Reown) —
+       โหลดจากไฟล์ในเครื่อง (vendor/walletconnect-bundle.js) เป็นอันดับแรกเสมอ ไม่ต้องพึ่ง CDN ภายนอกแล้ว
+       ไฟล์นี้สร้างขึ้นครั้งเดียวด้วยเครื่องมือ build แยกต่างหาก (ดู wc-bundle-builder/README.txt) แล้วเก็บไว้ถาวรในแอป
+       ถ้าไฟล์นี้ยังไม่มี (เช่นตอนพัฒนา/ทดสอบผ่านเบราว์เซอร์ปกติที่ยังไม่ได้วางไฟล์ vendor ไว้) จะ fallback ไปโหลดจาก CDN แทน
+       เพื่อให้ยังทดสอบต่อได้ระหว่างพัฒนา แต่เวอร์ชันที่ deploy จริงควรมีไฟล์ vendor นี้อยู่เสมอ -->
+  <script src="vendor/walletconnect-bundle.js" onerror="window._wcBundleMissing=true"></script>
   <script type="module">
     (async function initWalletConnect(){
       try {
-        var { createAppKit } = await import('https://esm.run/@reown/appkit@1.6.8');
-        var { WagmiAdapter } = await import('https://esm.run/@reown/appkit-adapter-wagmi@1.6.8');
-        var { polygon, bsc, arbitrum, base } = await import('https://esm.run/@reown/appkit/networks');
-        var { reconnect } = await import('https://esm.run/@wagmi/core@2.16.7');
+        var lib;
+        if (window.WCBundle) {
+          // โหลดจากไฟล์ในเครื่องสำเร็จ — ไม่แตะอินเทอร์เน็ตเลยสำหรับขั้นตอนนี้
+          lib = window.WCBundle;
+        } else {
+          // ไฟล์ vendor ยังไม่มี (โหมดพัฒนา/ทดสอบ) — fallback ไปโหลดจาก CDN แบบเดิม
+          console.warn('[WalletConnect] ไม่พบไฟล์ vendor/walletconnect-bundle.js ในเครื่อง — fallback ไปโหลดจาก CDN แทน (โปรดสร้างไฟล์ vendor ก่อน deploy จริง ดู wc-bundle-builder/README.txt)');
+          var appkitMod = await import('https://esm.run/@reown/appkit@1.6.8');
+          var adapterMod = await import('https://esm.run/@reown/appkit-adapter-wagmi@1.6.8');
+          var networksMod = await import('https://esm.run/@reown/appkit/networks');
+          var wagmiMod = await import('https://esm.run/@wagmi/core@2.16.7');
+          lib = {
+            createAppKit: appkitMod.createAppKit,
+            WagmiAdapter: adapterMod.WagmiAdapter,
+            polygon: networksMod.polygon, bsc: networksMod.bsc, arbitrum: networksMod.arbitrum, base: networksMod.base,
+            reconnect: wagmiMod.reconnect,
+            getConnectorClient: wagmiMod.getConnectorClient
+          };
+        }
+
+        var createAppKit = lib.createAppKit;
+        var WagmiAdapter = lib.WagmiAdapter;
+        var polygon = lib.polygon, bsc = lib.bsc, arbitrum = lib.arbitrum, base = lib.base;
+        var reconnect = lib.reconnect;
+        var getConnectorClient = lib.getConnectorClient;
 
         var projectId = '869fb81440023bf647988605e6decfd6';
 
@@ -80,7 +101,6 @@
         modal.subscribeAccount(async function(account) {
           if (account && account.address && account.isConnected) {
             try {
-              var { getConnectorClient } = await import('https://esm.run/@wagmi/core@2.16.7');
               var client = await getConnectorClient(wagmiAdapter.wagmiConfig);
               var { providers, account: acc } = client;
               if (client.transport && client.transport.type === 'custom') {
@@ -93,7 +113,7 @@
           }
         });
       } catch(e) {
-        // โหลด/สร้าง WalletConnect ไม่สำเร็จ (เช่นไลบรารีย่อยจาก CDN พัง) — ไม่ทำให้แอปพัง แค่ปิดฟีเจอร์เชื่อมกระเป๋าคริปโตชั่วคราว
+        // โหลด/สร้าง WalletConnect ไม่สำเร็จ — ไม่ทำให้แอปพัง แค่ปิดฟีเจอร์เชื่อมกระเป๋าคริปโตชั่วคราว
         console.warn('[WalletConnect init failed — ฟีเจอร์เชื่อมกระเป๋าคริปโตจะใช้ไม่ได้ชั่วคราว ส่วนอื่นของแอปยังใช้ได้ปกติ]', e);
         window._wcInitFailed = true;
       }
