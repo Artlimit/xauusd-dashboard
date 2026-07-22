@@ -1,0 +1,17 @@
+{
+  "name": "puppypocket-walletconnect-bundle-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "รันครั้งเดียวเพื่อสร้างไฟล์ walletconnect-bundle.js ไว้ใช้ในแอป (ไม่ต้องพึ่ง CDN ภายนอกอีกต่อไป)",
+  "scripts": {
+    "build": "esbuild entry.js --bundle --format=iife --global-name=WCBundle --outfile=walletconnect-bundle.js --minify --platform=browser --target=es2020"
+  },
+  "dependencies": {
+    "@reown/appkit": "1.6.8",
+    "@reown/appkit-adapter-wagmi": "1.6.8",
+    "@wagmi/core": "2.16.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}
