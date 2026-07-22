@@ -5322,9 +5322,7 @@ function maybeAskAgentNotifyPermission(){
 // ผู้ช่วย AI (เสียง+กล้อง) — กดปุ่มเขียวเพื่อคุยกับ AI ที่มองเห็นผ่านกล้องได้
 // กล้อง = ดวงตา, ไมค์ = ปาก ของผู้ช่วย
 // ============================================================
-var aiAgentState='idle'; // idle | listening | thinking | speaking
 var _aiCamStream=null;
-var _aiRecognition=null;
 var _aiVisionOn=false;
 var _aiCamFacing='environment'; // 'environment' = กล้องหลัง, 'user' = กล้องหน้า
 var _aiHistory=[]; // [{role,text}]
@@ -5554,14 +5552,12 @@ function openAIAssistant(){
   loadAIFacesList();
   document.getElementById('modal-ai-assistant').classList.add('open');
   hideAIErrorNote();
-  setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
+  AIConv.setState('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
 }
 function closeAIAssistantOutside(e){ if(e.target===e.currentTarget) closeAIAssistant(); }
 function closeAIAssistant(){
   document.getElementById('modal-ai-assistant').classList.remove('open');
-  _aiConversationActive=false;
-  stopAIListening();
-  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  AIConv.endConversation({silent:true});
   stopAICamera();
 }
 
@@ -5630,155 +5626,329 @@ function captureAIFrameBase64(){
   }
 }
 
-function setAIStatus(stateName,text){
-  aiAgentState=stateName;
-  var dot=document.getElementById('ai-status-dot');
-  var txt=document.getElementById('ai-status-text');
-  if(!dot||!txt) return;
-  txt.textContent=text;
-  var colors={idle:'var(--fg-m)',listening:'var(--red)',thinking:'var(--yellow)',speaking:'var(--green)'};
-  dot.style.background=colors[stateName]||'var(--fg-m)';
-  dot.classList.toggle('pulse', stateName!=='idle');
-  var micBtn=document.getElementById('ai-mic-btn');
-  var bg={idle:'linear-gradient(135deg,var(--purple-mid),var(--pink))',listening:'#ff3b30',
-    thinking:'#ffcc00',speaking:'#34c759'};
-  if(micBtn) micBtn.style.background=bg[stateName]||bg.idle;
-}
+// ============================================================
+// AIConv — State Machine กลางสำหรับผู้ช่วย AI ทั้งหมด (รีแฟกเตอร์จากตัวแปรกระจัดกระจายเดิม)
+// States: idle → listening → thinking → speaking → waiting → (listening อีกครั้ง)
+// กติกาจบบทสนทนา: จบได้ 2 ทางเท่านั้น คือพูดคำว่า "ขอบคุณ" หรือปิดหน้าต่างผู้ช่วย AI ทั้งบาน
+// Error ระหว่างฟัง/ส่งข้อความ "ไม่จบสนทนา" — ระบบพยายามฟื้นตัวเองอัตโนมัติเสมอ (auto-recovery)
+// SpeechRecognition สร้างครั้งเดียวใช้ซ้ำตลอด (ไม่สร้าง instance ใหม่ทุกครั้งที่กดไมค์)
+// มี lock (isRunning / isApiRunning) กันเหตุการณ์ซ้อนกัน (ฟังซ้อนฟัง, ยิง API ซ้อน API)
+// ============================================================
+var AIConv = {
+  STOP_PHRASE: 'ขอบคุณ',
 
-var _aiConversationActive=false; // true = อยู่ระหว่างบทสนทนาต่อเนื่อง (แตะไมค์ครั้งเดียวค้างไว้ จนกว่าจะพูด "ขอบคุณ" หรือแตะซ้ำ)
-var AI_STOP_PHRASE='ขอบคุณ';
+  state: 'idle',           // idle | listening | thinking | speaking | waiting
+  active: false,           // true = อยู่ระหว่างบทสนทนาต่อเนื่อง
+  recognition: null,       // SpeechRecognition instance เดียว ใช้ซ้ำตลอดทั้งเซสชัน
+  isRunning: false,        // lock: true ระหว่างที่ recognition.start() ทำงานอยู่ (ยังไม่ end)
+  isApiRunning: false,     // lock: กันเรียก callClaudeAI ซ้อนกัน
 
-/** ป้ายเตือนเล็กๆ ใต้กล่องสถานะ ผู้ช่วย AI — ใช้แทน toast ลอยสำหรับ error เฉพาะจุดของหน้านี้
- * โชว์เฉพาะตอนมี error จริงๆ เท่านั้น ไม่โชว์ล่วงหน้าแบบเดา และหายไปเองตอนเริ่มฟังใหม่ */
-function showAIErrorNote(msg){
-  var note=document.getElementById('ai-error-note');
-  if(!note) return;
-  note.textContent=msg;
-  note.style.display='block';
-}
-function hideAIErrorNote(){
-  var note=document.getElementById('ai-error-note');
-  if(note) note.style.display='none';
-}
+  listenAttempt: 0,
+  LISTEN_RETRY_BACKOFF_CAP_MS: 5000, // เพดานหน่วงสูงสุดตอน retry ฟัง กันรัวถี่จนกินแบต
 
-function onAIMicClick(){
-  if(aiAgentState==='listening' || aiAgentState==='thinking' || aiAgentState==='speaking'){
-    // ระหว่างสนทนาอยู่ ไม่มีการยกเลิกด้วยการแตะไมค์ซ้ำ — จบสนทนาได้ทางเดียวคือพูดคำว่า "ขอบคุณ" เท่านั้น
-    // แตะซ้ำตอนนี้จะไม่มีผลอะไร (กันแตะโดนโดยไม่ตั้งใจแล้วสนทนาหลุดกลางคัน)
-    return;
-  }
-  primeSpeechSynthesis(); // ต้องเรียกตรงนี้แบบ sync ในตัว handler ของการแตะจริงๆ ไม่งั้นบาง browser (เช่น Safari มือถือ) จะเงียบเสียงตอนพูดจริงทีหลัง
-  _aiConversationActive=true;
-  _aiListenAttempt=0; // แตะเริ่มเองใหม่ทุกครั้ง รีเซ็ตตัวนับ retry
-  startAIListening();
-}
+  sendAttempt: 0,
+  MAX_SEND_RETRIES: 1,          // ส่งไม่สำเร็จ ลองซ้ำอัตโนมัติด้วยข้อความเดิม 1 ครั้ง
+  SEND_RETRY_DELAY_MS: 1500,
+  pendingUserText: null,        // ข้อความล่าสุดที่ยังส่งไม่สำเร็จ เก็บไว้ retry ไม่ทิ้งสิ่งที่ผู้ใช้พูดไป
+  sendRetryTimer: null,
+  onlineListenerAdded: false,
 
-/** "ปลุก" speechSynthesis ด้วย utterance สั้นๆ ตรงจังหวะแตะจริงของผู้ใช้ (user gesture)
- * เพราะมือถือหลายตัว (โดยเฉพาะ Safari/WebView) จะเงียบเสียงถ้า speak() ถูกเรียกทีหลังจาก
- * promise/async chain (เช่นหลัง fetch API เสร็จ) ที่ไม่ได้อยู่ในจังหวะแตะโดยตรงแล้ว */
-function primeSpeechSynthesis(){
-  if(!window.speechSynthesis || _speechPrimed) return;
-  try{
-    var warm=new SpeechSynthesisUtterance(' ');
-    warm.volume=0;
-    window.speechSynthesis.speak(warm);
-    _speechPrimed=true;
-  }catch(e){ /* เงียบไว้ ไม่ต้องกวนผู้ใช้ ถ้าพังจะยังมีปุ่ม 🔊 ฟังอีกครั้ง เป็นทางสำรอง */ }
-}
-var _speechPrimed=false;
+  speechPrimed: false,
+  settleTimer: null,            // หน่วงสั้นๆ ก่อนเปิดไมค์ต่อหลัง TTS จบ (audio handoff ของ Android)
 
-var _aiListenAttempt=0; // นับจำนวนครั้งที่ auto-retry เปิดไมค์ติดต่อกัน ใช้คำนวณ backoff เท่านั้น ไม่ใช้จำกัดจำนวนครั้งอีกต่อไป
-var AI_RETRY_BACKOFF_CAP_MS=5000; // เพดานเวลาหน่วงสูงสุดต่อครั้ง กันรัว retry ถี่เกินไปจนกินแบตเตอรี่ ถ้า error ซ้ำต่อเนื่องนานๆ
+  _gotResultThisTurn: false,
+  _errorHandledThisTurn: false,
 
-function startAIListening(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ showAIErrorNote('เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
-  hideAIErrorNote();
-  var replyBox=document.getElementById('ai-reply-box');
-  if(replyBox) replyBox.style.display='none';
-  var replayRow=document.getElementById('ai-replay-row');
-  if(replayRow) replayRow.style.display='none';
-  setAIStatus('listening','กำลังฟัง...');
-  reallyStartAIRecognition(SR);
-}
-function reallyStartAIRecognition(SR){
-  _aiRecognition=new SR();
-  _aiRecognition.lang='th-TH';
-  _aiRecognition.interimResults=false;
-  _aiRecognition.maxAlternatives=1;
-  var gotResult=false;
-  var errorHandled=false;
+  // ---------- state + UI ----------
+  setState: function(stateName, text){
+    this.state = stateName;
+    var dot = document.getElementById('ai-status-dot');
+    var txt = document.getElementById('ai-status-text');
+    if(!dot || !txt) return;
+    txt.textContent = text;
+    var colors = {idle:'var(--fg-m)', listening:'var(--red)', thinking:'var(--yellow)', speaking:'var(--green)', waiting:'var(--yellow)'};
+    dot.style.background = colors[stateName] || 'var(--fg-m)';
+    dot.classList.toggle('pulse', stateName !== 'idle');
+    var micBtn = document.getElementById('ai-mic-btn');
+    var bg = {idle:'linear-gradient(135deg,var(--purple-mid),var(--pink))', listening:'#ff3b30', thinking:'#ffcc00', speaking:'#34c759', waiting:'#ffcc00'};
+    if(micBtn) micBtn.style.background = bg[stateName] || bg.idle;
+  },
+  showError: function(msg){ showAIErrorNote(msg); },
+  hideError: function(){ hideAIErrorNote(); },
+  idleText: function(){ return 'พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)'; },
 
-  function retryListenSoon(){
-    _aiListenAttempt++;
-    setAIStatus('listening','กำลังฟัง...');
-    var delay=Math.min(400 + _aiListenAttempt*300, AI_RETRY_BACKOFF_CAP_MS);
-    setTimeout(function(){
-      if(_aiConversationActive) startAIListening();
-    }, delay);
-  }
+  // ---------- entry point (แตะไมค์) ----------
+  micTapped: function(){
+    if(this.state !== 'idle') return; // ระหว่างสนทนาอยู่ แตะไมค์ไม่มีผล จบได้ทางเดียวคือพูด "ขอบคุณ"
+    this.primeSpeechSynthesis();
+    this.active = true;
+    this.listenAttempt = 0;
+    this.startListening();
+  },
 
-  _aiRecognition.onresult=function(event){
+  primeSpeechSynthesis: function(){
+    // "ปลุก" speechSynthesis ด้วย utterance สั้นๆ ตรงจังหวะแตะจริงของผู้ใช้ (user gesture)
+    // มือถือหลายตัว (โดยเฉพาะ Safari/WebView) จะเงียบเสียงถ้า speak() ถูกเรียกทีหลังจาก promise/async chain
+    if(!window.speechSynthesis || this.speechPrimed) return;
     try{
-      gotResult=true;
-      _aiListenAttempt=0; // ได้ยินเสียงจริงแล้ว รีเซ็ตตัวนับ backoff
-      var text=event.results[0][0].transcript;
-      if(text.indexOf(AI_STOP_PHRASE)>-1){
-        _aiConversationActive=false;
-        setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
+      var warm = new SpeechSynthesisUtterance(' ');
+      warm.volume = 0;
+      window.speechSynthesis.speak(warm);
+      this.speechPrimed = true;
+    }catch(e){ /* เงียบไว้ ไม่ต้องกวนผู้ใช้ ยังมีปุ่ม 🔊 ฟังอีกครั้ง เป็นทางสำรอง */ }
+  },
+
+  // ---------- listening ----------
+  ensureRecognition: function(){
+    if(this.recognition) return this.recognition;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR) return null;
+    var self = this;
+    var rec = new SR();
+    rec.lang = 'th-TH';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = function(event){ self.onRecognitionResult(event); };
+    rec.onerror = function(event){ self.onRecognitionError(event); };
+    rec.onend = function(){ self.onRecognitionEnd(); };
+    this.recognition = rec;
+    return rec;
+  },
+  startListening: function(){
+    if(!this.active) return;
+    var rec = this.ensureRecognition();
+    if(!rec){ this.showError('เบราว์เซอร์นี้ไม่รองรับการฟังเสียง (ลองใช้ Chrome บน Android)'); return; }
+    if(this.isRunning) return; // lock กันเรียกซ้อน
+    this.hideError();
+    var replyBox = document.getElementById('ai-reply-box'); if(replyBox) replyBox.style.display = 'none';
+    var replayRow = document.getElementById('ai-replay-row'); if(replayRow) replayRow.style.display = 'none';
+    this._gotResultThisTurn = false;
+    this._errorHandledThisTurn = false;
+    this.setState('listening', 'กำลังฟัง...');
+    try{
+      this.isRunning = true;
+      rec.start();
+    }catch(e){
+      this.isRunning = false;
+      if(this.active) this.retryListenSoon();
+    }
+  },
+  stopListening: function(){
+    if(this.recognition && this.isRunning){ try{ this.recognition.stop(); }catch(e){} }
+    this.isRunning = false;
+  },
+  retryListenSoon: function(){
+    this.listenAttempt++;
+    this.setState('listening', 'กำลังฟัง...');
+    var self = this;
+    var delay = Math.min(400 + this.listenAttempt*300, this.LISTEN_RETRY_BACKOFF_CAP_MS);
+    setTimeout(function(){ if(self.active) self.startListening(); }, delay);
+  },
+  onRecognitionResult: function(event){
+    this.isRunning = false;
+    try{
+      this._gotResultThisTurn = true;
+      this.listenAttempt = 0; // ได้ยินเสียงจริงแล้ว รีเซ็ตตัวนับ backoff
+      var text = event.results[0][0].transcript;
+      if(text.indexOf(this.STOP_PHRASE) > -1){
+        this.endConversation();
         return;
       }
-      processAIUserInput(text);
+      this.processUserInput(text);
     }catch(e){
       // ข้อผิดพลาดระหว่างประมวลผลคำพูด — แจ้งให้เห็นเฉยๆ แต่ไม่จบสนทนา จะพูด "ขอบคุณ" เท่านั้นถึงจะจบได้จริง
-      console.warn('[onresult error]',e);
-      showAIErrorNote('เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e));
-      retryListenSoon();
+      console.warn('[onresult error]', e);
+      this.showError('เกิดข้อผิดพลาด: ' + (e && e.message ? e.message : e));
+      this.retryListenSoon();
     }
-  };
-  _aiRecognition.onerror=function(event){
-    var reason=event&&event.error?event.error:'ไม่ทราบสาเหตุ';
+  },
+  onRecognitionError: function(event){
+    this.isRunning = false;
+    var reason = event && event.error ? event.error : 'ไม่ทราบสาเหตุ';
     console.warn('[AI mic error]', reason, event);
-    errorHandled=true;
-    var msgMap={
+    this._errorHandledThisTurn = true;
+    var msgMap = {
       'not-allowed':'ไม่ได้รับสิทธิ์ไมค์ — เช็คการอนุญาตไมค์ของเบราว์เซอร์ให้เว็บนี้ (จะลองฟังต่ออัตโนมัติ)',
       'audio-capture':'หาไมค์ไม่เจอ หรือไมค์ถูกแอปอื่นใช้งานอยู่ (จะลองฟังต่ออัตโนมัติ)',
       'no-speech':'ไม่ได้ยินเสียงพูด',
       'network':'เน็ตหลุดระหว่างฟังเสียง (จะลองฟังต่ออัตโนมัติ)',
       'aborted':'การฟังถูกยกเลิกกลางคัน'
     };
-    // ไม่จบสนทนาอีกต่อไปไม่ว่า error จะเป็นอะไรก็ตาม — จบได้ทางเดียวคือพูด "ขอบคุณ" เท่านั้น
-    // แสดงข้อความไว้ให้เห็นเฉยๆ (เฉพาะ error ที่ไม่ใช่แค่เงียบธรรมดา) แล้วลองฟังใหม่ต่อเรื่อยๆ
-    if(reason!=='no-speech' && reason!=='aborted'){
-      showAIErrorNote('ผู้ช่วย AI ฟังไม่สำเร็จ: '+(msgMap[reason]||reason));
+    // ไม่จบสนทนาไม่ว่า error จะเป็นอะไรก็ตาม — จบได้ทางเดียวคือพูด "ขอบคุณ" เท่านั้น
+    if(reason !== 'no-speech' && reason !== 'aborted'){
+      this.showError('ผู้ช่วย AI ฟังไม่สำเร็จ: ' + (msgMap[reason] || reason));
     }
-    if(_aiConversationActive) retryListenSoon();
-  };
-  _aiRecognition.onend=function(){
-    if(errorHandled) return; // onerror จัดการ (รวมถึง retry) ไปแล้ว ไม่ต้องทำซ้ำตรงนี้
-    if(!gotResult && _aiConversationActive){
-      // จบเงียบๆ โดยไม่มี error event และไม่มีเสียงเข้าเลย — ลองฟังต่อ ไม่จบสนทนา
-      retryListenSoon();
+    if(this.active) this.retryListenSoon();
+  },
+  onRecognitionEnd: function(){
+    this.isRunning = false;
+    if(this._errorHandledThisTurn) return; // onRecognitionError จัดการ (รวม retry) ไปแล้ว
+    if(!this._gotResultThisTurn && this.active){
+      // จบเงียบๆ ไม่มี error event และไม่มีเสียงเข้าเลย — ลองฟังต่อ ไม่จบสนทนา
+      this.retryListenSoon();
       return;
     }
-    if(aiAgentState==='listening') setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-  };
-  try{ _aiRecognition.start(); }catch(e){ if(_aiConversationActive) retryListenSoon(); }
+    if(this.state === 'listening') this.setState('idle', this.idleText());
+  },
+
+  // ---------- speaking → listening handoff ----------
+  continueAfterSpeaking: function(){
+    if(!this.active) return;
+    this.listenAttempt = 0;
+    this.setState('waiting', 'กำลังเตรียมฟัง...');
+    var self = this;
+    clearTimeout(this.settleTimer);
+    // หน่วงเวลาสั้นๆ ก่อนเปิดไมค์ เพราะพอ TTS พูดจบปุ๊บ ระบบเสียงของ Android ต้องใช้เวลาสั้นๆ "ปล่อย" ลำโพง/audio focus ก่อน
+    // ถ้าเปิดไมค์ทันทีในจังหวะนั้น ไมค์จะแย่งจับสัญญาณเร็วเกินไปจนไม่ได้เสียงอะไรเลย แล้วปิดตัวเองทันที (อาการ "เด้งแป๊บเดียว")
+    this.settleTimer = setTimeout(function(){ if(self.active) self.startListening(); }, 700);
+  },
+
+  // ---------- sending to API ----------
+  processUserInput: function(userText){
+    if(this.isApiRunning) return; // lock กันเรียกซ้อน
+    this.isApiRunning = true;
+    this.pendingUserText = userText;
+    this.setState('thinking', 'กำลังประมวลผล...');
+    var imageBase64 = captureAIFrameBase64();
+    var self = this;
+
+    var timeoutPromise = new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error('ใช้เวลานานเกินไป ลองใหม่อีกครั้ง')); }, 25000);
+    });
+
+    var workPromise = Promise.resolve().then(function(){
+      return Promise.all([recognizeAICurrentFace(), getAILocationWeatherContext()]);
+    }).then(function(results){
+      return callClaudeAI(userText, imageBase64, results[0], results[1]);
+    }).then(function(rawAiText){
+      self.isApiRunning = false;
+      self.pendingUserText = null; self.sendAttempt = 0;
+      var parsed = parseAIMarkers(rawAiText);
+      if(parsed.facts.length) mergeAIFacts(parsed.facts);
+      var speakableText = stripMarkdownForSpeech(parsed.cleanText);
+
+      if(parsed.faceName){
+        return registerFaceAuto(parsed.faceName).then(function(code){
+          if(code){
+            speakableText += ' จดจำใบหน้าคุณ ' + parsed.faceName + ' รหัส ' + code + ' เรียบร้อยแล้วนะคะ';
+          } else if(!_aiVisionOn){
+            speakableText += ' แต่ยังเปิดกล้องไม่ได้อยู่ เปิดกล้องแล้วบอกชื่ออีกทีนะคะ ถึงจะจดจำใบหน้าได้';
+          }
+          saveAIChat(userText, speakableText);
+          self.speak(speakableText);
+        });
+      } else {
+        saveAIChat(userText, speakableText);
+        self.speak(speakableText);
+      }
+    });
+
+    Promise.race([workPromise, timeoutPromise]).catch(function(err){
+      self.isApiRunning = false;
+      console.warn('[AI send error]', err);
+      self.retryOrGiveUpSend(err);
+    });
+  },
+
+  /** ส่งไม่สำเร็จ (เน็ตหลุด/API error/timeout) — ลองซ้ำอัตโนมัติด้วยข้อความเดิม 1 ครั้งก่อน (ไม่ต้องพูดซ้ำเอง)
+   * ถ้าลองซ้ำแล้วยังไม่สำเร็จอีก จะพูดขอโทษด้วยเสียงแล้วกลับไปฟังคำถามใหม่ทันที — ไม่ปล่อยให้ค้าง และไม่จบสนทนาทั้งหมด
+   * (จบสนทนาทั้งหมดได้ทางเดียวคือพูด "ขอบคุณ" เท่านั้น ตามที่ตั้งไว้) */
+  retryOrGiveUpSend: function(err){
+    var self = this;
+    clearTimeout(this.sendRetryTimer);
+    if(!this.active || !this.pendingUserText){ this.setState('idle', this.idleText()); return; }
+
+    if(this.sendAttempt < this.MAX_SEND_RETRIES){
+      this.sendAttempt++;
+      this.showError('ผู้ช่วย AI ผิดพลาด: ' + (err && err.message ? err.message : err) + ' — กำลังลองส่งข้อความเดิมอีกครั้ง');
+      this.setState('thinking', 'ขาดการเชื่อมต่อ กำลังลองส่งข้อความเดิมอีกครั้ง...');
+
+      if(!this.onlineListenerAdded){
+        this.onlineListenerAdded = true;
+        window.addEventListener('online', function(){
+          if(self.active && self.pendingUserText && !self.isApiRunning){
+            clearTimeout(self.sendRetryTimer);
+            self.processUserInput(self.pendingUserText);
+          }
+        });
+      }
+      this.sendRetryTimer = setTimeout(function(){
+        if(self.active && self.pendingUserText) self.processUserInput(self.pendingUserText);
+      }, this.SEND_RETRY_DELAY_MS);
+      return;
+    }
+
+    // ลองซ้ำครบแล้วยังไม่สำเร็จ — ขอโทษด้วยเสียง แล้วกลับไปฟังคำถามใหม่ (ไม่ค้างเงียบ ไม่จบสนทนาทั้งหมด)
+    this.sendAttempt = 0;
+    this.pendingUserText = null;
+    this.showError('ผู้ช่วย AI ผิดพลาด: ' + (err && err.message ? err.message : err));
+    this.speak('ขอโทษด้วยค่ะ ระบบตอบกลับช้ากว่าปกติ ลองพูดคำถามอีกครั้งได้เลยนะคะ');
+  },
+
+  // ---------- speaking ----------
+  speak: function(text){
+    this.setState('speaking', 'กำลังพูด...');
+    showAIReplyText(text);
+    var self = this;
+    if(speakViaNativeBridge(text)){
+      window.onNativeTTSDone = function(){
+        window.onNativeTTSDone = null;
+        self.setState('idle', self.idleText());
+        self.continueAfterSpeaking();
+      };
+      return;
+    }
+    if(!window.speechSynthesis){ this.setState('idle', this.idleText()); this.continueAfterSpeaking(); return; }
+    function doSpeak(){
+      var utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'th-TH';
+      var v = pickThaiVoice();
+      if(v) utter.voice = v; // ถ้าไม่มีเสียงไทยเลยในเครื่อง ก็ปล่อยให้ใช้เสียง default ไป
+      utter.onend = function(){ self.setState('idle', self.idleText()); self.continueAfterSpeaking(); };
+      utter.onerror = function(){ self.setState('idle', self.idleText()); self.continueAfterSpeaking(); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    }
+    // เสียงพูด (voice list) ของเบราว์เซอร์โหลดแบบ async — ถ้ายังไม่มีเลยตอนนี้ ให้รอ event 'voiceschanged' สั้นๆ ก่อนค่อยพูด
+    if(window.speechSynthesis.getVoices().length === 0){
+      var fallbackTimer = setTimeout(doSpeak, 400);
+      window.speechSynthesis.onvoiceschanged = function(){ clearTimeout(fallbackTimer); doSpeak(); };
+    } else {
+      doSpeak();
+    }
+  },
+
+  // ---------- ending ----------
+  /** จบบทสนทนาทั้งหมด — เรียกได้จาก 2 จุดเท่านั้น: พูดคำว่า "ขอบคุณ" หรือปิดหน้าต่างผู้ช่วย AI/เปิดกล่องปรับพฤติกรรม
+   * opts.silent=true จะไม่เปลี่ยนข้อความสถานะ (ใช้ตอนปิดหน้าต่างไปเลย ไม่ต้องโชว์อะไรต่อ) */
+  endConversation: function(opts){
+    opts = opts || {};
+    this.active = false;
+    this.pendingUserText = null; this.sendAttempt = 0; this.listenAttempt = 0;
+    clearTimeout(this.settleTimer);
+    clearTimeout(this.sendRetryTimer);
+    this.stopListening();
+    if(window.speechSynthesis) window.speechSynthesis.cancel();
+    if(!opts.silent) this.setState('idle', this.idleText());
+  }
+};
+
+// ---------- thin wrapper functions (คงชื่อเดิมไว้ ให้ HTML/โค้ดส่วนอื่นเรียกได้เหมือนเดิม ไม่ต้องแก้ที่อื่น) ----------
+function onAIMicClick(){ AIConv.micTapped(); }
+function processAIUserInput(userText){ AIConv.processUserInput(userText); }
+function speakAIText(text){ AIConv.speak(text); }
+
+/** ป้ายเตือนเล็กๆ ใต้กล่องสถานะ ผู้ช่วย AI — ใช้แทน toast ลอยสำหรับ error เฉพาะจุดของหน้านี้
+ * โชว์เฉพาะตอนมี error จริงๆ เท่านั้น ไม่โชว์ล่วงหน้าแบบเดา และหายไปเองตอนเริ่มฟังใหม่ */
+function showAIErrorNote(msg){
+  var note = document.getElementById('ai-error-note');
+  if(!note) return;
+  note.textContent = msg;
+  note.style.display = 'block';
 }
-function stopAIListening(){
-  if(_aiRecognition){ try{ _aiRecognition.stop(); }catch(e){} _aiRecognition=null; }
-}
-/** เรียกหลังคุยจบรอบหนึ่ง (AI พูดจบ/ผิดพลาด) — ถ้ายังอยู่ระหว่างบทสนทนา (ยังไม่พูด "ขอบคุณ"/ยังไม่แตะไมค์ปิดเอง) ให้ฟังต่ออัตโนมัติ ไม่ต้องแตะไมค์ใหม่ทุกครั้ง
- * หน่วงเวลาสั้นๆ ก่อนเปิดไมค์ เพราะพอ TTS พูดจบปุ๊บ ระบบเสียงของ Android ต้องใช้เวลาสั้นๆ "ปล่อย" ลำโพง/audio focus ก่อน
- * ถ้าเปิดไมค์ทันทีในจังหวะนั้น ไมค์จะแย่งจับสัญญาณเร็วเกินไปจนไม่ได้เสียงอะไรเลย แล้วปิดตัวเองทันที (อาการ "เด้งแป๊บเดียว")
- * ต่อให้หน่วงแล้วยังชนจังหวะอยู่บ้าง ตัว retry เงียบๆ ใน reallyStartAIRecognition ด้านบนจะรับช่วงลองใหม่ให้เองอีกที */
-function continueConversationIfActive(){
-  if(!_aiConversationActive) return;
-  _aiListenAttempt=0; // เริ่มรอบใหม่ นับ retry ใหม่
-  setAIStatus('idle','กำลังเตรียมฟัง...');
-  setTimeout(function(){
-    if(_aiConversationActive) startAIListening();
-  }, 700);
+function hideAIErrorNote(){
+  var note = document.getElementById('ai-error-note');
+  if(note) note.style.display = 'none';
 }
 
 // ============================================================
@@ -5789,10 +5959,8 @@ function getAIPersona(){ return load(aiPersonaKey(),''); }
 function openAIPersonaModal(){
   var input=document.getElementById('ai-persona-input');
   if(input) input.value=getAIPersona();
-  // หยุดการฟัง/พูดชั่วคราวตอนเปิดกล่องนี้ กันชนกับการฟังที่อาจทำงานอยู่เบื้องหลัง
-  _aiConversationActive=false;
-  stopAIListening();
-  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  // หยุดสนทนาชั่วคราวตอนเปิดกล่องนี้ กันชนกับการฟังที่อาจทำงานอยู่เบื้องหลัง
+  AIConv.endConversation({silent:true});
   document.getElementById('modal-ai-persona').classList.add('open');
 }
 function closeAIPersonaModal(){
@@ -5817,46 +5985,6 @@ function stripMarkdownForSpeech(text){
     .replace(/^[-•]\s+/gm,'')         // - บูลเลต -> (ตัดทิ้ง)
     .replace(/\*/g,'')                // เก็บกวาดดอกจันเดี่ยวที่หลงเหลือ
     .trim();
-}
-
-function processAIUserInput(userText){
-  setAIStatus('thinking','กำลังประมวลผล...');
-  var imageBase64=captureAIFrameBase64();
-
-  var timeoutPromise=new Promise(function(_,reject){
-    setTimeout(function(){ reject(new Error('ใช้เวลานานเกินไป ลองใหม่อีกครั้ง')); }, 25000);
-  });
-
-  var workPromise=Promise.resolve().then(function(){
-    return Promise.all([recognizeAICurrentFace(), getAILocationWeatherContext()]);
-  }).then(function(results){
-    return callClaudeAI(userText,imageBase64,results[0],results[1]);
-  }).then(function(rawAiText){
-    var parsed=parseAIMarkers(rawAiText);
-    if(parsed.facts.length) mergeAIFacts(parsed.facts);
-    var speakableText=stripMarkdownForSpeech(parsed.cleanText);
-
-    if(parsed.faceName){
-      return registerFaceAuto(parsed.faceName).then(function(code){
-        if(code){
-          speakableText += ' จดจำใบหน้าคุณ '+parsed.faceName+' รหัส '+code+' เรียบร้อยแล้วนะคะ';
-        } else if(!_aiVisionOn){
-          speakableText += ' แต่ยังเปิดกล้องไม่ได้อยู่ เปิดกล้องแล้วบอกชื่ออีกทีนะคะ ถึงจะจดจำใบหน้าได้';
-        }
-        saveAIChat(userText,speakableText);
-        speakAIText(speakableText);
-      });
-    } else {
-      saveAIChat(userText,speakableText);
-      speakAIText(speakableText);
-    }
-  });
-
-  Promise.race([workPromise, timeoutPromise]).catch(function(err){
-    showAIErrorNote('ผู้ช่วย AI ผิดพลาด: '+(err&&err.message?err.message:err));
-    setAIStatus('idle','เกิดข้อผิดพลาด แตะไมค์เพื่อลองใหม่');
-    continueConversationIfActive();
-  });
 }
 
 /** วันเวลาปัจจุบันแบบไทย (พ.ศ.) — ไม่ต้องพึ่ง API เลย ได้ทันทีเสมอ */
@@ -5964,38 +6092,6 @@ function pickThaiVoice(){
 /** ตั้ง callback ไว้รอรับสัญญาณจริงจากฝั่ง native ว่า TTS พูดจบแล้ว (เรียกจาก MainActivity.kt ผ่าน onDone/onError ของ UtteranceProgressListener)
  * ใช้แทนการเดาเวลาไว้ล่วงหน้า เพราะความยาวข้อความไม่ได้แปลตรงๆ เป็นระยะเวลาพูดเสมอไป (จังหวะพูด/ภาษา/ความเร็วเสียงต่างกันได้) */
 window.onNativeTTSDone = null;
-
-function speakAIText(text){
-  setAIStatus('speaking','กำลังพูด...');
-  showAIReplyText(text);
-  if(speakViaNativeBridge(text)){
-    window.onNativeTTSDone=function(){
-      window.onNativeTTSDone=null;
-      setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม (พูด "ขอบคุณ" เพื่อจบการสนทนา)');
-      continueConversationIfActive();
-    };
-    return;
-  }
-  if(!window.speechSynthesis){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); continueConversationIfActive(); return; }
-  function doSpeak(){
-    var utter=new SpeechSynthesisUtterance(text);
-    utter.lang='th-TH';
-    var v=pickThaiVoice();
-    if(v) utter.voice=v; // ถ้าไม่มีเสียงไทยเลยในเครื่อง ก็ปล่อยให้ใช้เสียง default ไป (อาจอ่านสำเนียงแปลกแต่ยังมีเสียง)
-    utter.onend=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); continueConversationIfActive(); };
-    utter.onerror=function(){ setAIStatus('idle','พร้อมสนทนา — แตะไมค์เพื่อเริ่ม'); continueConversationIfActive(); };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utter);
-  }
-  // เสียงพูด (voice list) ของเบราว์เซอร์โหลดแบบ async — ถ้ายังไม่มีเลยตอนนี้ ให้รอ event 'voiceschanged' สั้นๆ ก่อนค่อยพูด
-  // กันเคส speak() เงียบเพราะยังไม่มี voice ให้ผูกตอนเรียกครั้งแรกของเพจ
-  if(window.speechSynthesis.getVoices().length===0){
-    var fallbackTimer=setTimeout(doSpeak, 400);
-    window.speechSynthesis.onvoiceschanged=function(){ clearTimeout(fallbackTimer); doSpeak(); };
-  } else {
-    doSpeak();
-  }
-}
 
 function callClaudeAI(userText,imageBase64,recognizedFace,locationWeatherText){
   return ensureAIApiKeyAsync().then(function(apiKey){
