@@ -18,7 +18,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-        
+
+      # ---- ส่วนที่เพิ่มใหม่: สร้างไฟล์ WalletConnect ไว้ใช้ในเครื่อง ไม่ต้องพึ่ง CDN ภายนอกตอนแอปรันจริง ----
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build WalletConnect local bundle (ไม่พึ่ง CDN)
+        run: |
+          cd wc-bundle-builder
+          npm install
+          npm run build
+          mkdir -p ../app/src/main/assets/vendor
+          cp walletconnect-bundle.js ../app/src/main/assets/vendor/walletconnect-bundle.js
+      # ---- จบส่วนที่เพิ่มใหม่ ----
+
       - name: Build with Gradle
         run: gradle assembleDebug
         
