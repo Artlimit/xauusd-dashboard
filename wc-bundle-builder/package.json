@@ -4,7 +4,7 @@
   "private": true,
   "description": "รันครั้งเดียวเพื่อสร้างไฟล์ walletconnect-bundle.js ไว้ใช้ในแอป (ไม่ต้องพึ่ง CDN ภายนอกอีกต่อไป)",
   "scripts": {
-    "build": "esbuild entry.js --bundle --format=iife --global-name=WCBundle --outfile=walletconnect-bundle.js --minify --platform=browser --target=es2020 --log-limit=0 --external:@safe-global/* --external:@walletconnect/ethereum-provider --external:@base-org/account --external:@coinbase/wallet-sdk --external:@wagmi/core/tempo"
+    "build": "esbuild entry.js --bundle --format=iife --global-name=WCBundle --outfile=walletconnect-bundle.js --minify --platform=browser --target=es2020 --log-limit=0 --external:@safe-global/* --external:@walletconnect/ethereum-provider --external:@base-org/account --external:@coinbase/wallet-sdk --external:@wagmi/core/tempo --external:@metamask/connect-evm --external:porto --external:porto/internal"
   },
   "dependencies": {
     "@reown/appkit": "1.6.8",
