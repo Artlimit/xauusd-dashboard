@@ -258,8 +258,19 @@
     .wc-balance{position:relative;z-index:1;margin-bottom:16px}
     .wc-balance .amount{font-family:'Nunito',sans-serif;font-size:2.6rem;font-weight:900;color:white;
       line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.2)}
-    .wc-balance .cur{font-size:1.1rem;font-weight:600;opacity:.8;margin-right:2px}
+    .wc-balance .cur{font-size:1.1rem;font-weight:600;opacity:.8;margin-right:2px;display:inline-flex;align-items:center;gap:4px;vertical-align:middle}
     .wc-balance .sub{font-size:.68rem;color:rgba(255,255,255,.5);margin-top:4px}
+    .coin-logo-fallback{border-radius:50%;background:rgba(255,255,255,.22);display:flex;align-items:center;
+      justify-content:center;font-weight:800;color:#fff;flex-shrink:0}
+    .wc-other-coins-btn{display:flex;align-items:center;gap:6px;font-size:.68rem;color:rgba(255,255,255,.75);
+      margin-top:8px;cursor:pointer;width:fit-content}
+    .wc-other-coins-btn .arrow{opacity:.6}
+    .coin-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)}
+    .coin-row:last-child{border-bottom:none}
+    .coin-row-info{flex:1;text-align:left;min-width:0}
+    .coin-row-symbol{font-size:.85rem;font-weight:700}
+    .coin-row-name{font-size:.65rem;color:var(--fg-m)}
+    .coin-row-amt{font-size:.85rem;font-weight:700;text-align:right}
     .wc-actions{display:flex;gap:10px;position:relative;z-index:1}
     .wc-btn{flex:1;padding:10px 0;border:none;border-radius:14px;font-family:inherit;
       font-size:.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;
@@ -674,6 +685,17 @@
     .cb-danger:hover{opacity:.9}
     .cb-primary{background:linear-gradient(135deg,var(--purple-mid),var(--pink));color:white}
     .cb-primary:hover{opacity:.9}
+    .chain-option{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;
+      background:var(--bg-card);border:1.5px solid var(--border);cursor:pointer;text-align:left;
+      transition:border-color .15s,background .15s}
+    .chain-option:active{opacity:.85}
+    .chain-option.active{border-color:var(--purple-mid);background:rgba(139,95,207,.12)}
+    .chain-option-icon{font-size:1.4rem;width:34px;height:34px;border-radius:50%;background:var(--bg-card-h);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .chain-option-info{flex:1;min-width:0}
+    .chain-option-name{font-size:.85rem;font-weight:700;color:var(--fg)}
+    .chain-option-gas{font-size:.65rem;color:var(--fg-m)}
+    .chain-option-check{color:var(--purple-mid);flex-shrink:0}
 
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 
@@ -818,6 +840,7 @@
         <div class="amount"><span class="cur" id="wc-cur">฿</span><span id="balanceDisplay">0.00</span></div>
         <div class="sub" id="wc-thb-equiv" style="display:none"></div>
         <div class="sub" id="wc-update-time" style="margin-top:6px"></div>
+        <div class="wc-other-coins-btn" id="wc-other-coins-btn" onclick="openOtherCoinsModal()" style="display:none">👛 ดูเหรียญอื่นในกระเป๋า<span class="arrow">›</span></div>
       </div>
       <div class="wc-portfolio" id="wc-portfolio"></div>
     </div>
@@ -1316,6 +1339,28 @@
       <button class="w-btn" id="wcfb-confirm-btn" onclick="wcFallbackConfirmConnected()" style="background:rgba(139,95,207,.15);color:var(--purple-light)">
         ฉันเชื่อมต่อแล้ว
       </button>
+    </div>
+  </div>
+
+  <!-- เลือกเครือข่าย USDC — ใช้ modal ของแอปเอง แทน prompt() ของเบราว์เซอร์ (บางเบราว์เซอร์ในแอปกระเป๋าเงินบล็อก prompt ไปเลย) -->
+  <div class="modal-overlay" id="modal-chain-selector" onclick="if(event.target===this)closeModal('modal-chain-selector')">
+    <div class="success-modal" style="text-align:center;padding:26px 22px">
+      <div style="font-size:2rem;margin-bottom:8px">🌐</div>
+      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1.05rem;margin-bottom:4px">เลือกเครือข่าย USDC</div>
+      <div style="font-size:.7rem;color:var(--fg-m);margin-bottom:16px">ยอดเงิน USDC ของแต่ละเครือข่ายแยกจากกัน ไม่ปนกัน</div>
+      <div id="chain-selector-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="w-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="closeModal('modal-chain-selector')">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- ดูเหรียญอื่นในกระเป๋า (ยอด USDC หลัก + เหรียญแก๊สของเครือข่ายที่เชื่อมต่ออยู่) -->
+  <div class="modal-overlay" id="modal-other-coins" onclick="if(event.target===this)closeModal('modal-other-coins')">
+    <div class="success-modal" style="text-align:center;padding:26px 22px">
+      <div style="font-size:2rem;margin-bottom:8px">👛</div>
+      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1.05rem;margin-bottom:4px">เหรียญในกระเป๋าของคุณ</div>
+      <div style="font-size:.7rem;color:var(--fg-m);margin-bottom:12px">ยอดคงเหลือแยกตามเหรียญบนเครือข่ายที่เชื่อมต่ออยู่</div>
+      <div id="other-coins-list" style="display:flex;flex-direction:column"></div>
+      <button class="w-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="closeModal('modal-other-coins')">ปิด</button>
     </div>
   </div>
 
@@ -2274,13 +2319,39 @@ async function sendOnchainUSDC(toAddress, amount) {
 async function getMaticBalance(address) {
   try {
     var raw = window._wcProvider;
-    var readProvider = web3Provider || (raw ? new ethers.BrowserProvider(raw) : new ethers.JsonRpcProvider('https://polygon-rpc.com'));
+    var readProvider = web3Provider || (raw ? new ethers.BrowserProvider(raw) : new ethers.JsonRpcProvider(getCurrentChain().rpc));
     var bal = await readProvider.getBalance(address);
     return parseFloat(ethers.formatEther(bal));
   } catch (e) {
     console.error('getMaticBalance error', e);
     return null;
   }
+}
+
+/** เปิดหน้าต่างแสดงเหรียญอื่นในกระเป๋าที่เชื่อมต่ออยู่ — USDC (ยอดหลักที่แสดงอยู่บนจออยู่แล้ว)
+ * และเหรียญแก๊สของเครือข่ายปัจจุบัน (MATIC/BNB/ETH ตามแต่ละเชน) พร้อมโลโก้จริงของแต่ละเหรียญ */
+function openOtherCoinsModal() {
+  var member = getCurrentMember();
+  if (!member || !member.walletAddress) return;
+  var chain = getCurrentChain();
+  var listEl = document.getElementById('other-coins-list');
+
+  var usdcBalText = document.getElementById('balanceDisplay').textContent;
+  listEl.innerHTML =
+    '<div class="coin-row">' + usdcLogoImgHtml(32)
+    + '<div class="coin-row-info"><div class="coin-row-symbol">USDC</div><div class="coin-row-name">USD Coin</div></div>'
+    + '<div class="coin-row-amt">' + usdcBalText + '</div></div>'
+    + '<div class="coin-row" id="other-coin-native-row">' + chainLogoImgHtml(currentChainKey, 32)
+    + '<div class="coin-row-info"><div class="coin-row-symbol">' + chain.gasSymbol + '</div><div class="coin-row-name">เหรียญแก๊สของ ' + chain.name + '</div></div>'
+    + '<div class="coin-row-amt" id="other-coin-native-amt">กำลังโหลด...</div></div>';
+
+  document.getElementById('modal-other-coins').classList.add('open');
+
+  getMaticBalance(member.walletAddress).then(function(bal){
+    var amtEl = document.getElementById('other-coin-native-amt');
+    if (!amtEl) return; // ปิด modal ไปแล้วก่อนโหลดเสร็จ ไม่ต้องอัปเดต
+    amtEl.textContent = (bal === null) ? '—' : bal.toFixed(5);
+  });
 }
 
 // ============================================================
@@ -2393,17 +2464,52 @@ function showWalletInProfile() {
   }
 }
 
+/** ไอคอนสำหรับแต่ละเครือข่าย (ใช้ emoji ธรรมดา ไม่ต้องพึ่งไฟล์ภาพภายนอก) */
+/** ไอคอนเครือข่ายแบบ SVG วาดเองตามสีและรูปแบบโลโก้จริงของแต่ละเชน (ไม่ต้องพึ่งไฟล์ภาพ/CDN ภายนอก โหลดได้ทันทีเสมอ) */
+/** URL โลโก้จริงของแต่ละเครือข่าย/เหรียญ — ลิงก์ไปโหลดจาก CDN สาธารณะตอนรันเวลาแสดงผลจริง (เหมือนไอคอนเหรียญในเอเจนต์ราคาที่ลิงก์จาก CoinGecko)
+ * ไม่ได้ก็อปปี้ไฟล์ภาพเข้ามาเก็บในโค้ดเอง — ถ้าโหลดไม่ขึ้น (เน็ตหลุด/URL เปลี่ยน) จะ fallback เป็นวงกลมตัวอักษรแทนเงียบๆ ไม่พังหน้าจอ */
+var CHAIN_LOGO_URL = {
+  polygon:  'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+  bnb:      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png',
+  arbitrum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+  base:     'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png'
+};
+var USDC_LOGO_URL = 'https://assets.coingecko.com/coins/images/6319/small/usdc.png';
+
+/** สร้าง <img> โลโก้เครือข่าย พร้อม fallback เป็นวงกลมตัวอักษรแรกของชื่อเชน ถ้าโหลดรูปไม่ขึ้น */
+function chainLogoImgHtml(chainKey, size){
+  size = size || 20;
+  var url = CHAIN_LOGO_URL[chainKey];
+  var fallbackLetter = ((CHAINS[chainKey] && CHAINS[chainKey].name) || '?').charAt(0);
+  if(!url) return '<div class="coin-logo-fallback" style="width:'+size+'px;height:'+size+'px;font-size:'+(size*0.5)+'px">'+fallbackLetter+'</div>';
+  return '<img src="'+url+'" alt="" style="width:'+size+'px;height:'+size+'px;border-radius:50%;flex-shrink:0;object-fit:cover" '
+    + 'onerror="this.outerHTML=\'<div class=&quot;coin-logo-fallback&quot; style=&quot;width:'+size+'px;height:'+size+'px;font-size:'+(size*0.5)+'px&quot;>'+fallbackLetter+'</div>\'">';
+}
+/** สร้าง <img> โลโก้ USDC พร้อม fallback เป็นวงกลมสัญลักษณ์ $ ถ้าโหลดรูปไม่ขึ้น */
+function usdcLogoImgHtml(size){
+  size = size || 18;
+  return '<img src="'+USDC_LOGO_URL+'" alt="USDC" style="width:'+size+'px;height:'+size+'px;border-radius:50%;flex-shrink:0;object-fit:cover" '
+    + 'onerror="this.outerHTML=\'<div class=&quot;coin-logo-fallback&quot; style=&quot;width:'+size+'px;height:'+size+'px;font-size:'+(size*0.5)+'px&quot;>$</div>\'">';
+}
+
 function openChainSelector() {
-  var options = Object.entries(CHAINS).map(function(entry){
+  var listEl = document.getElementById('chain-selector-list');
+  listEl.innerHTML = Object.entries(CHAINS).map(function(entry){
     var key = entry[0]; var ch = entry[1];
-    return (key === currentChainKey ? '✓ ' : '   ') + ch.name + ' (gas: ' + ch.gasSymbol + ')';
-  });
-  var choice = prompt('เลือกเครือข่าย USDC:\n\n' + options.map(function(o,i){ return (i+1)+'. '+o; }).join('\n') + '\n\nพิมพ์หมายเลข (1-' + options.length + ')');
-  if (!choice) return;
-  var idx = parseInt(choice) - 1;
-  var keys = Object.keys(CHAINS);
-  if (idx < 0 || idx >= keys.length) { toast('error','หมายเลขไม่ถูกต้อง'); return; }
-  currentChainKey = keys[idx];
+    var isActive = key === currentChainKey;
+    return '<button type="button" class="chain-option' + (isActive ? ' active' : '') + '" onclick="selectChain(\'' + key + '\')">'
+      + '<div class="chain-option-icon">' + chainLogoImgHtml(key, 22) + '</div>'
+      + '<div class="chain-option-info"><div class="chain-option-name">' + ch.name + '</div><div class="chain-option-gas">ค่าธรรมเนียม: ' + ch.gasSymbol + '</div></div>'
+      + (isActive ? '<div class="chain-option-check"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' : '')
+      + '</button>';
+  }).join('');
+  document.getElementById('modal-chain-selector').classList.add('open');
+}
+
+function selectChain(key) {
+  closeModal('modal-chain-selector');
+  if (!CHAINS[key]) { toast('error','เครือข่ายไม่ถูกต้อง'); return; }
+  currentChainKey = key;
   save(KEYS.chain, currentChainKey); // จำเครือข่ายที่เลือกไว้ ไม่ต้องรีเซ็ตเป็น Polygon ทุกครั้งที่โหลดหน้าใหม่
   var chain = getCurrentChain();
   document.getElementById('pf-chain-label').textContent = 'เครือข่าย: ' + chain.name;
@@ -2834,12 +2940,14 @@ function renderMain(){
   var thbEquivEl=document.getElementById('wc-thb-equiv');
   var refreshBtn=document.getElementById('wc-refresh-btn');
   var netBadge=document.getElementById('wc-network-badge');
+  var otherCoinsBtn=document.getElementById('wc-other-coins-btn');
 
   if (member.walletAddress) {
     // โหมด wallet จริง — ดึงยอด USDC จาก Polygon
-    if(curEl) curEl.textContent='USDC ';
+    if(curEl) curEl.innerHTML=usdcLogoImgHtml(16)+' USDC ';
     if(refreshBtn) refreshBtn.style.display='flex';
-    if(netBadge) netBadge.innerHTML='🔗<span id="wc-level-text">'+getCurrentChain().name+'</span>';
+    if(netBadge) netBadge.innerHTML=chainLogoImgHtml(currentChainKey,16)+'<span id="wc-level-text">'+getCurrentChain().name+'</span>';
+    if(otherCoinsBtn) otherCoinsBtn.style.display='flex';
     document.getElementById('balanceDisplay').textContent='…';
     if(thbEquivEl){ thbEquivEl.style.display='block'; thbEquivEl.textContent='กำลังโหลดยอดจาก Blockchain...'; }
 
@@ -2873,9 +2981,10 @@ function renderMain(){
     }
   } else {
     // โหมด ledger ภายในแอป (เดิม)
-    if(curEl) curEl.textContent='USDC ';
+    if(curEl) curEl.innerHTML=usdcLogoImgHtml(16)+' USDC ';
     if(refreshBtn) refreshBtn.style.display='none';
     if(netBadge) netBadge.innerHTML='⭐<span id="wc-level-text">'+level+'</span>';
+    if(otherCoinsBtn) otherCoinsBtn.style.display='none';
     animateBalance(acc.balance);
     updateAgentInvestedNetDisplay();
     if(thbEquivEl){
