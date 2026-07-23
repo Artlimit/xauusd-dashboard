@@ -98,8 +98,15 @@
         window._wcReconnect = function () { return reconnect(wagmiAdapter.wagmiConfig); };
 
         // listen state change — เมื่อเชื่อมสำเร็จ inject provider เข้าระบบเดิม
+        // สำคัญ: subscribeAccount เป็น reactive subscription ที่ยิงซ้ำได้หลายครั้งแม้ account จะไม่เปลี่ยน
+        // (เช่นตอน re-render ภายในของ library เอง) ต้องกันไว้ไม่ให้รัน connect handler ซ้ำสำหรับ address เดิม
+        // ไม่งั้นจะเห็น toast "เชื่อมต่อสำเร็จ" ซ้อนกันหลายอัน และ startAutoRefresh/linkWalletToSession ถูกเรียกซ้ำๆ
+        var _lastHandledWCAddress = null;
         modal.subscribeAccount(async function(account) {
           if (account && account.address && account.isConnected) {
+            var addrLower = account.address.toLowerCase();
+            if (addrLower === _lastHandledWCAddress) return; // account เดิม ไม่มีอะไรเปลี่ยน ข้ามไป
+            _lastHandledWCAddress = addrLower;
             try {
               var client = await getConnectorClient(wagmiAdapter.wagmiConfig);
               var { providers, account: acc } = client;
@@ -110,6 +117,8 @@
                 if (window._onWCConnected) window._onWCConnected(account.address, raw);
               }
             } catch(e) { console.warn('WC provider extract error', e); }
+          } else {
+            _lastHandledWCAddress = null; // ตัดการเชื่อมต่อแล้ว รีเซ็ต กันเผื่อเชื่อมใหม่ด้วย address เดิมในอนาคต
           }
         });
       } catch(e) {
@@ -2429,11 +2438,28 @@ function handleWalletMenuClick() {
       message: 'ปัจจุบัน: ' + shortenAddr(m.walletAddress),
       confirmLabel: 'เปลี่ยนกระเป๋า',
       danger: false,
-      onConfirm: function(){ connectViaWalletConnect(); }
+      onConfirm: function(){ switchConnectedWallet(); }
     });
   } else {
     requireWallet('ผูกกระเป๋า', function(){ showWalletInProfile(); renderMain(); });
   }
+}
+
+/** เปลี่ยนกระเป๋าที่เชื่อมต่ออยู่ — ต้องตัดเซสชัน WalletConnect เดิมออกก่อนเสมอ แล้วค่อยเปิดหน้าจอเชื่อมต่อใหม่
+ * ถ้าเปิดหน้าจอ "Connect" ตรงๆ ทั้งที่ยังมีเซสชันเดิมเชื่อมอยู่ ตัว connector จะโยน error
+ * "Connector already connected" ออกมาทันที (เพราะมันมองว่ากำลังเชื่อมต่ออยู่แล้ว ไม่ควรเชื่อมซ้ำ) */
+async function switchConnectedWallet() {
+  try {
+    if (window._wcModal && typeof window._wcModal.disconnect === 'function') {
+      await window._wcModal.disconnect();
+    }
+  } catch (e) {
+    console.warn('ตัดเซสชันเดิมก่อนเปลี่ยนกระเป๋าไม่สำเร็จ (ไม่กระทบ ลองเชื่อมใหม่ต่อได้เลย)', e);
+  }
+  window._wcProvider = null;
+  connectedWalletAddress = null;
+  web3Provider = null; web3Signer = null; usdcContract = null;
+  connectViaWalletConnect();
 }
 
 // ตัดการเชื่อมต่อ wallet เท่านั้น (แยกจาก PIN logout) — สมาชิกยังอยู่ในแอป แค่ไม่ผูก wallet แล้ว
