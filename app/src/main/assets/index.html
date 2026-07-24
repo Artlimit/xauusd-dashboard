@@ -121,6 +121,14 @@
             _lastHandledWCAddress = null; // ตัดการเชื่อมต่อแล้ว รีเซ็ต กันเผื่อเชื่อมใหม่ด้วย address เดิมในอนาคต
           }
         });
+
+        // จำไอคอน/ชื่อของแอปกระเป๋าที่ผู้ใช้เลือกเชื่อมต่อ (เช่น Trust Wallet, MetaMask, imToken ฯลฯ)
+        // ข้อมูลนี้ตัวกระเป๋าเงินเองเป็นคนส่งมาให้ผ่านเซสชัน WalletConnect ตอนเชื่อมต่อ ไม่ใช่ไฟล์ที่เราเก็บเอง
+        modal.subscribeWalletInfo(function(info) {
+          window._connectedWalletIcon = (info && info.icon) || null;
+          window._connectedWalletName = (info && info.name) || null;
+          if (window.updateConnectedWalletIconUI) window.updateConnectedWalletIconUI();
+        });
       } catch(e) {
         // โหลด/สร้าง WalletConnect ไม่สำเร็จ — ไม่ทำให้แอปพัง แค่ปิดฟีเจอร์เชื่อมกระเป๋าคริปโตชั่วคราว
         console.warn('[WalletConnect init failed — ฟีเจอร์เชื่อมกระเป๋าคริปโตจะใช้ไม่ได้ชั่วคราว ส่วนอื่นของแอปยังใช้ได้ปกติ]', e);
@@ -830,7 +838,10 @@
     </div>
     <div class="wallet-card" id="walletCard">
       <div class="wc-top">
-        <span class="wc-label">ยอดเงินคงเหลือ</span>
+        <span class="wc-label" style="display:flex;align-items:center;gap:6px">
+          <img id="wc-connected-wallet-icon" src="" alt="" style="display:none;width:18px;height:18px;border-radius:50%;flex-shrink:0;object-fit:cover">
+          ยอดเงินคงเหลือ
+        </span>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="wc-level" id="wc-network-badge">⭐<span id="wc-level-text">Puppy Beginner</span></div>
           <button type="button" class="wc-refresh-icon" id="wc-refresh-btn" onclick="refreshOnchainBalance()" style="display:none" title="รีเฟรชยอด"><svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
@@ -1350,6 +1361,49 @@
       <div style="font-size:.7rem;color:var(--fg-m);margin-bottom:16px">ยอดเงิน USDC ของแต่ละเครือข่ายแยกจากกัน ไม่ปนกัน</div>
       <div id="chain-selector-list" style="display:flex;flex-direction:column;gap:8px"></div>
       <button class="w-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:14px" onclick="closeModal('modal-chain-selector')">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- เพิ่มเครือข่ายเอง (สำหรับผู้ใช้ขั้นสูง) — ต้องกรอกที่อยู่ USDC contract บนเครือข่ายนั้นให้ถูกต้อง ไม่งั้นยอดเงิน/การโอนจะใช้งานไม่ได้ -->
+  <div class="modal-overlay" id="modal-add-chain" onclick="if(event.target===this)closeModal('modal-add-chain')">
+    <div class="success-modal" style="text-align:center;padding:26px 22px;max-height:85vh;overflow-y:auto">
+      <div style="font-size:2rem;margin-bottom:8px">➕</div>
+      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:1.05rem;margin-bottom:4px">เพิ่มเครือข่ายเอง</div>
+      <div style="font-size:.68rem;color:var(--fg-m);margin-bottom:16px;text-align:left;background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:10px">
+        ⚠️ สำหรับผู้ใช้ขั้นสูง ต้องกรอกที่อยู่ USDC contract บนเครือข่ายนั้นให้ถูกต้อง ไม่งั้นยอดเงิน/การโอนจะใช้งานไม่ได้
+      </div>
+      <div style="text-align:left;display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">ชื่อเครือข่าย</label>
+          <input class="w-input" id="ac-name" type="text" placeholder="เช่น Optimism">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">Chain ID (ตัวเลขหรือ 0x...)</label>
+          <input class="w-input" id="ac-chainid" type="text" placeholder="เช่น 10 หรือ 0xa">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">RPC URL</label>
+          <input class="w-input" id="ac-rpc" type="text" placeholder="https://...">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">สัญลักษณ์เหรียญแก๊ส</label>
+          <input class="w-input" id="ac-gas" type="text" placeholder="เช่น ETH">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">ที่อยู่ USDC Contract</label>
+          <input class="w-input" id="ac-usdc" type="text" placeholder="0x...">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">ทศนิยมของ USDC (ปกติคือ 6)</label>
+          <input class="w-input" id="ac-decimals" type="text" placeholder="6" value="6">
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:var(--fg-m)">Block Explorer URL (ไม่บังคับ)</label>
+          <input class="w-input" id="ac-explorer" type="text" placeholder="https:// (เว้นว่างได้)">
+        </div>
+      </div>
+      <button class="w-btn" style="margin-top:16px" onclick="saveCustomChain()">บันทึกเครือข่าย</button>
+      <button class="w-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:8px" onclick="closeModal('modal-add-chain')">ยกเลิก</button>
     </div>
   </div>
 
@@ -1998,6 +2052,16 @@ var CHAINS = {
   arbitrum: { id:'0xa4b1', name:'Arbitrum',  usdc:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals:6,  rpc:'https://arb1.arbitrum.io/rpc',      explorer:'https://arbiscan.io',            native:'ETH',  gasSymbol:'ETH'  },
   base:     { id:'0x2105', name:'Base',      usdc:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals:6,  rpc:'https://mainnet.base.org',          explorer:'https://basescan.org',           native:'ETH',  gasSymbol:'ETH'  },
 };
+/** เครือข่ายที่ผู้ใช้เพิ่มเอง — เก็บแยกไว้ต่างหาก แล้ว merge เข้า CHAINS ตอนเริ่มแอปทุกครั้ง
+ * ฟังก์ชันอื่นๆ (switchToPolygonNetwork, renderMain, selectChain ฯลฯ) อ่านจาก CHAINS[currentChainKey] อยู่แล้ว
+ * ทำงานได้เลยกับเครือข่ายที่เพิ่มเองโดยไม่ต้องแก้อะไรเพิ่ม ตราบใดที่ข้อมูลมีครบทุกฟิลด์เหมือนเครือข่ายที่มีอยู่แล้ว */
+var CUSTOM_CHAINS_KEY = 'pp_custom_chains';
+function loadCustomChains(){ return load(CUSTOM_CHAINS_KEY, {}); }
+function saveCustomChains(obj){ save(CUSTOM_CHAINS_KEY, obj); }
+(function mergeCustomChainsIntoRegistry(){
+  var custom = loadCustomChains();
+  Object.keys(custom).forEach(function(key){ CHAINS[key] = custom[key]; });
+})();
 var currentChainKey = (function(){
   var saved = load(KEYS.chain, 'polygon');
   return CHAINS[saved] ? saved : 'polygon'; // เผื่อ key เก่าไม่ตรงกับ CHAINS ปัจจุบัน
@@ -2354,6 +2418,23 @@ function openOtherCoinsModal() {
   });
 }
 
+/** โชว์/ซ่อนไอคอนแอปกระเป๋าที่เชื่อมต่ออยู่ (เช่น Trust Wallet, MetaMask, imToken) ข้างคำว่า "ยอดเงินคงเหลือ"
+ * ไอคอนนี้มาจากตัวกระเป๋าเงินเองที่ส่งข้อมูลมาให้ผ่านเซสชัน WalletConnect ตอนเชื่อมต่อ (window._connectedWalletIcon)
+ * ไม่ใช่ไฟล์ที่เราเก็บ/คัดลอกมาเอง ถ้ากระเป๋าไม่ได้ส่งไอคอนมาให้ (บางกระเป๋าไม่ส่ง) จะซ่อนไอคอนไปเงียบๆ ไม่โชว์อะไรแทน */
+function updateConnectedWalletIconUI(){
+  var iconEl = document.getElementById('wc-connected-wallet-icon');
+  if (!iconEl) return;
+  if (window._connectedWalletIcon) {
+    iconEl.src = window._connectedWalletIcon;
+    iconEl.alt = window._connectedWalletName || '';
+    iconEl.style.display = 'inline-block';
+    iconEl.onerror = function(){ iconEl.style.display = 'none'; };
+  } else {
+    iconEl.style.display = 'none';
+  }
+}
+window.updateConnectedWalletIconUI = updateConnectedWalletIconUI;
+
 // ============================================================
 // ON-CHAIN TRANSFER CONFIRMATION MODAL
 // ============================================================
@@ -2492,18 +2573,94 @@ function usdcLogoImgHtml(size){
     + 'onerror="this.outerHTML=\'<div class=&quot;coin-logo-fallback&quot; style=&quot;width:'+size+'px;height:'+size+'px;font-size:'+(size*0.5)+'px&quot;>$</div>\'">';
 }
 
+var BUILTIN_CHAIN_KEYS = ['polygon','bnb','arbitrum','base'];
+
 function openChainSelector() {
   var listEl = document.getElementById('chain-selector-list');
   listEl.innerHTML = Object.entries(CHAINS).map(function(entry){
     var key = entry[0]; var ch = entry[1];
     var isActive = key === currentChainKey;
-    return '<button type="button" class="chain-option' + (isActive ? ' active' : '') + '" onclick="selectChain(\'' + key + '\')">'
+    var isCustom = BUILTIN_CHAIN_KEYS.indexOf(key) === -1;
+    return '<div style="display:flex;align-items:center;gap:6px">'
+      + '<button type="button" class="chain-option' + (isActive ? ' active' : '') + '" style="flex:1" onclick="selectChain(\'' + key + '\')">'
       + '<div class="chain-option-icon">' + chainLogoImgHtml(key, 22) + '</div>'
       + '<div class="chain-option-info"><div class="chain-option-name">' + ch.name + '</div><div class="chain-option-gas">ค่าธรรมเนียม: ' + ch.gasSymbol + '</div></div>'
       + (isActive ? '<div class="chain-option-check"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' : '')
-      + '</button>';
-  }).join('');
+      + '</button>'
+      + (isCustom ? '<button type="button" onclick="deleteCustomChain(\''+key+'\')" style="background:none;border:none;color:var(--red);padding:8px;flex-shrink:0" title="ลบเครือข่ายนี้"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m5 0V4a1 1 0 011-1h2a1 1 0 011 1v2"/></svg></button>' : '')
+      + '</div>';
+  }).join('') + '<button type="button" class="chain-option" style="justify-content:center;border-style:dashed" onclick="openAddChainModal()">'
+    + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple-mid)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    + '<span style="font-size:.8rem;font-weight:700;color:var(--purple-mid)">เพิ่มเครือข่ายเอง</span></button>';
   document.getElementById('modal-chain-selector').classList.add('open');
+}
+
+function deleteCustomChain(key) {
+  if (key === currentChainKey) { toast('error','กำลังใช้เครือข่ายนี้อยู่ กรุณาสลับไปเครือข่ายอื่นก่อนลบ'); return; }
+  showAppConfirm({
+    title: 'ลบเครือข่ายนี้?',
+    message: (CHAINS[key] ? CHAINS[key].name : '') + ' จะถูกลบออกจากรายการ',
+    confirmLabel: 'ลบเครือข่าย',
+    onConfirm: function(){
+      var custom = loadCustomChains();
+      delete custom[key];
+      saveCustomChains(custom);
+      delete CHAINS[key];
+      openChainSelector(); // รีเฟรชรายการ
+      toast('success','ลบเครือข่ายแล้ว');
+    }
+  });
+}
+
+function openAddChainModal() {
+  ['ac-name','ac-chainid','ac-rpc','ac-gas','ac-usdc','ac-explorer'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.getElementById('ac-decimals').value = '6';
+  document.getElementById('modal-add-chain').classList.add('open');
+}
+
+/** บันทึกเครือข่ายที่ผู้ใช้กรอกเอง — ตรวจข้อมูลเบื้องต้นก่อน (รูปแบบที่อยู่/ตัวเลข) แล้วรวมเข้า CHAINS ให้ใช้งานได้ทันที
+ * เหมือนเครือข่ายที่มีอยู่แล้วในแอปทุกอย่าง เพราะโค้ดส่วนอื่น (สลับเครือข่าย, เช็คยอด, โอนเงิน) อ่านจาก CHAINS object เดียวกันหมด */
+function saveCustomChain() {
+  var name = (document.getElementById('ac-name').value||'').trim();
+  var chainIdRaw = (document.getElementById('ac-chainid').value||'').trim();
+  var rpc = (document.getElementById('ac-rpc').value||'').trim();
+  var gas = (document.getElementById('ac-gas').value||'').trim();
+  var usdc = (document.getElementById('ac-usdc').value||'').trim();
+  var decimalsRaw = (document.getElementById('ac-decimals').value||'6').trim();
+  var explorer = (document.getElementById('ac-explorer').value||'').trim();
+
+  if (!name) { toast('error','กรุณากรอกชื่อเครือข่าย'); return; }
+  if (!chainIdRaw) { toast('error','กรุณากรอก Chain ID'); return; }
+  if (!/^https?:\/\//.test(rpc)) { toast('error','RPC URL ไม่ถูกต้อง ต้องขึ้นต้นด้วย https://'); return; }
+  if (!gas) { toast('error','กรุณากรอกสัญลักษณ์เหรียญแก๊ส'); return; }
+  if (!/^0x[a-fA-F0-9]{40}$/.test(usdc)) { toast('error','ที่อยู่ USDC Contract ไม่ถูกต้อง (ต้องเป็น 0x ตามด้วย 40 ตัวอักษร)'); return; }
+  var decimals = parseInt(decimalsRaw);
+  if (isNaN(decimals) || decimals < 0 || decimals > 18) { toast('error','ทศนิยมของ USDC ไม่ถูกต้อง'); return; }
+
+  // แปลง Chain ID ให้เป็น hex เสมอ (ผู้ใช้อาจกรอกเป็นเลขฐาน 10 เช่น 10, หรือ hex เช่น 0xa มาแล้วก็ได้)
+  var chainIdHex;
+  if (/^0x[0-9a-fA-F]+$/.test(chainIdRaw)) {
+    chainIdHex = chainIdRaw.toLowerCase();
+  } else if (/^\d+$/.test(chainIdRaw)) {
+    chainIdHex = '0x' + parseInt(chainIdRaw).toString(16);
+  } else {
+    toast('error','Chain ID ไม่ถูกต้อง กรอกเป็นตัวเลข (เช่น 10) หรือ hex (เช่น 0xa)');
+    return;
+  }
+
+  var key = 'custom_' + chainIdHex;
+
+  var chainObj = { id:chainIdHex, name:name, usdc:usdc, decimals:decimals, rpc:rpc, explorer:explorer, native:gas, gasSymbol:gas };
+  var custom = loadCustomChains();
+  custom[key] = chainObj;
+  saveCustomChains(custom);
+  CHAINS[key] = chainObj;
+
+  closeModal('modal-add-chain');
+  toast('success','เพิ่มเครือข่าย ' + name + ' แล้ว');
+  openChainSelector(); // รีเฟรชรายการให้เห็นเครือข่ายใหม่ทันที
 }
 
 function selectChain(key) {
@@ -2565,6 +2722,8 @@ async function switchConnectedWallet() {
   window._wcProvider = null;
   connectedWalletAddress = null;
   web3Provider = null; web3Signer = null; usdcContract = null;
+  window._connectedWalletIcon = null; window._connectedWalletName = null;
+  updateConnectedWalletIconUI();
   connectViaWalletConnect();
 }
 
@@ -2591,6 +2750,8 @@ function disconnectWalletOnly() {
 
       connectedWalletAddress = null;
       web3Provider = null; web3Signer = null; usdcContract = null;
+      window._connectedWalletIcon = null; window._connectedWalletName = null;
+      updateConnectedWalletIconUI();
       stopAutoRefresh();
 
       showWalletInProfile();
@@ -2948,6 +3109,7 @@ function renderMain(){
     if(refreshBtn) refreshBtn.style.display='flex';
     if(netBadge) netBadge.innerHTML=chainLogoImgHtml(currentChainKey,16)+'<span id="wc-level-text">'+getCurrentChain().name+'</span>';
     if(otherCoinsBtn) otherCoinsBtn.style.display='flex';
+    updateConnectedWalletIconUI();
     document.getElementById('balanceDisplay').textContent='…';
     if(thbEquivEl){ thbEquivEl.style.display='block'; thbEquivEl.textContent='กำลังโหลดยอดจาก Blockchain...'; }
 
@@ -2985,6 +3147,8 @@ function renderMain(){
     if(refreshBtn) refreshBtn.style.display='none';
     if(netBadge) netBadge.innerHTML='⭐<span id="wc-level-text">'+level+'</span>';
     if(otherCoinsBtn) otherCoinsBtn.style.display='none';
+    window._connectedWalletIcon = null; window._connectedWalletName = null;
+    updateConnectedWalletIconUI();
     animateBalance(acc.balance);
     updateAgentInvestedNetDisplay();
     if(thbEquivEl){
@@ -2999,7 +3163,7 @@ function renderMain(){
   var budgetEl=document.getElementById('main-budget-bar');
   if(!budgetEl){
     var budgetDiv=document.createElement('div');budgetDiv.id='main-budget-bar';
-    budgetDiv.style.cssText='margin:0 20px 12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px';
+    budgetDiv.style.cssText='margin:18px 20px 12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px';
     var wc=document.querySelector('.wallet-card');if(wc&&wc.nextSibling)wc.parentNode.insertBefore(budgetDiv,wc.nextSibling);
     budgetEl=budgetDiv;
   }
