@@ -1,77 +1,82 @@
 /**
- * ai-gateway-functions/index.js
+ * functions/index.js
  * ------------------------------------------------------------------
  * เกตเวย์กลางสำหรับผู้ช่วย AI ของ PuppyPocket
  *
  * แอปจะไม่เรียก Anthropic API ตรงจากเครื่องผู้ใช้อีกต่อไป (ซึ่งต้องฝัง API Key ไว้ในแอป เสี่ยงหลุด)
- * แต่จะเรียกฟังก์ชันนี้แทน — ฟังก์ชันนี้ถือ API Key ไว้อย่างปลอดภัยฝั่งเซิร์ฟเวอร์ (ไม่มีวันหลุดไปถึงเครื่องผู้ใช้)
- * แล้วค่อยส่งต่อคำขอไป Anthropic ให้ พร้อมมีการเช็คสิทธิ์ + จำกัดการใช้งานต่อวันกันการใช้เกิน
+ * แต่จะเรียกฟังก์ชันนี้แทน — ฟังก์ชันนี้ถือ API Key ไว้อย่างปลอดภัยฝั่งเซิร์ฟเวอร์ผ่าน Secret Manager
+ * (ไม่มีวันหลุดไปถึงเครื่องผู้ใช้) แล้วค่อยส่งต่อคำขอไป Anthropic ให้
+ * พร้อมมีการเช็คสิทธิ์ + จำกัดการใช้งานต่อวันกันการใช้เกิน
  *
- * ก่อน deploy ต้องตั้งค่า API Key ก่อน (รันครั้งเดียว):
- *   firebase functions:config:set anthropic.key="sk-ant-xxxxxxxx"
+ * ก่อน deploy ต้องตั้งค่า API Key ก่อน (รันครั้งเดียว หรือให้ GitHub Actions ทำให้อัตโนมัติ):
+ *   firebase functions:secrets:set ANTHROPIC_API_KEY
  * ------------------------------------------------------------------
  */
 
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
 const db = admin.firestore();
 
+// ประกาศ secret ที่ฟังก์ชันนี้ต้องใช้ — ค่าจริงมาจาก Secret Manager ไม่ได้ฝังในโค้ดเลย
+const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
+
 // จำกัดจำนวนครั้งที่เรียกผู้ช่วย AI ได้ต่อผู้ใช้ 1 คนต่อวัน กันการใช้เกิน/ป้องกันบิลบาน
-// ปรับตัวเลขนี้ได้ตามความเหมาะสม
 const DAILY_MESSAGE_LIMIT = 200;
 
-exports.aiGateway = functions
-  .runWith({ timeoutSeconds: 60, memory: "256MB" })
-  .https.onCall(async (data, context) => {
+exports.aiGateway = onCall(
+  { secrets: [anthropicKey], timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
     // 1) ต้องผ่านการล็อกอินก่อน (แอปทำ signInAnonymously() ให้อัตโนมัติอยู่แล้วตอนเปิดแอป)
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         "unauthenticated",
         "กรุณาเปิดแอปใหม่อีกครั้ง (ยังไม่ได้ยืนยันตัวตน)"
       );
     }
-    const uid = context.auth.uid;
+    const uid = request.auth.uid;
 
     // 2) ตรวจข้อมูลที่ส่งมาว่าครบถ้วน/รูปแบบถูกต้องหรือไม่
-    const { messages, system, maxTokens } = data || {};
+    const { messages, system, maxTokens } = request.data || {};
     if (!Array.isArray(messages) || messages.length === 0) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "invalid-argument",
         "ข้อมูลบทสนทนาที่ส่งมาไม่ถูกต้อง"
       );
     }
     if (typeof system !== "string") {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "system prompt ไม่ถูกต้อง"
-      );
+      throw new HttpsError("invalid-argument", "system prompt ไม่ถูกต้อง");
     }
 
     // 3) เช็ค + อัปเดตจำนวนครั้งที่ใช้ไปวันนี้ (กันเรียกเกิน)
-    const todayKey = new Date().toISOString().slice(0, 10); // เช่น "2026-07-24"
+    const todayKey = new Date().toISOString().slice(0, 10); // เช่น "2026-07-25"
     const usageRef = db.collection("ai_usage").doc(uid + "_" + todayKey);
 
     const allowed = await db.runTransaction(async (tx) => {
       const doc = await tx.get(usageRef);
       const count = doc.exists ? doc.data().count || 0 : 0;
       if (count >= DAILY_MESSAGE_LIMIT) return false;
-      tx.set(usageRef, { count: count + 1, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(
+        usageRef,
+        { count: count + 1, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
       return true;
     });
 
     if (!allowed) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "resource-exhausted",
         "วันนี้ใช้ผู้ช่วย AI ครบโควต้าแล้ว กรุณาลองใหม่พรุ่งนี้"
       );
     }
 
-    // 4) เรียก Anthropic API จริง ด้วย API Key ที่เก็บไว้ฝั่งเซิร์ฟเวอร์ (ไม่มีทางหลุดไปถึงแอป)
-    const apiKey = functions.config().anthropic && functions.config().anthropic.key;
+    // 4) เรียก Anthropic API จริง ด้วย API Key ที่ดึงมาจาก Secret Manager (ไม่มีทางหลุดไปถึงแอป)
+    const apiKey = anthropicKey.value();
     if (!apiKey) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "failed-precondition",
         "เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า API Key (ผู้ดูแลระบบต้องตั้งค่าก่อน)"
       );
@@ -94,7 +99,7 @@ exports.aiGateway = functions
         }),
       });
     } catch (networkErr) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "unavailable",
         "เชื่อมต่อ Anthropic API ไม่สำเร็จ: " + networkErr.message
       );
@@ -102,7 +107,7 @@ exports.aiGateway = functions
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "internal",
         "Anthropic API error " + response.status + ": " + errText
       );
@@ -110,4 +115,5 @@ exports.aiGateway = functions
 
     const result = await response.json();
     return result; // ส่งกลับให้แอปในรูปแบบเดียวกับที่ Anthropic ตอบมาเป๊ะๆ ไม่ต้องแปลงอะไรเพิ่ม
-  });
+  }
+);
