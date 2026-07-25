@@ -26,12 +26,13 @@ jobs:
       - name: Install function dependencies
         run: cd functions && npm install
 
-      - name: Set Anthropic API Key in Firebase Functions config
+      - name: Set Anthropic API Key in Secret Manager
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
-        run: firebase functions:config:set anthropic.key="${{ secrets.ANTHROPIC_API_KEY }}" --project puppy-pocket
+        run: |
+          echo -n "${{ secrets.ANTHROPIC_API_KEY }}" | firebase functions:secrets:set ANTHROPIC_API_KEY --project puppy-pocket --force
 
       - name: Deploy Firebase Functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
-        run: firebase deploy --only functions --project puppy-pocket --non-interactive
+        run: firebase deploy --only functions --project puppy-pocket --non-interactive --force
