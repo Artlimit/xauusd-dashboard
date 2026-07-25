@@ -17,6 +17,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
   <!-- face-api.js (ใช้สำหรับผู้ช่วย AI จดจำใบหน้า) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/dist/face-api.js"></script>
   <!-- WalletConnect AppKit (Reown) —
@@ -1863,19 +1864,6 @@
 
   <!-- AI Assistant Modal (เสียง+กล้อง) -->
   <!-- API Key Modal (ใช้แทน prompt() เพราะเบราว์เซอร์ในแอปกระเป๋าเงินบางตัวบล็อก prompt/alert/confirm) -->
-  <div class="sheet-overlay" id="modal-ai-apikey" style="z-index:200" onclick="closeAIApiKeyModalOutside(event)">
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title">🔑 ใส่ Anthropic API Key</div>
-      <div style="font-size:.72rem;color:var(--fg-m);margin-bottom:12px;text-align:center">
-        เก็บไว้ในเครื่องนี้เท่านั้น ใช้เปิดผู้ช่วย AI (สมัครได้ที่ console.anthropic.com)
-      </div>
-      <input class="w-input" id="ai-apikey-input" type="password" placeholder="sk-ant-..." style="margin-bottom:12px;width:100%">
-      <button type="button" class="s-btn" onclick="confirmAIApiKeyModal()">บันทึกและใช้งาน</button>
-      <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m);margin-top:8px" onclick="closeAIApiKeyModal('')">ยกเลิก</button>
-    </div>
-  </div>
-
   <div class="sheet-overlay" id="modal-ai-assistant" onclick="closeAIAssistantOutside(event)">
     <div class="sheet" style="max-height:90vh">
       <div class="sheet-handle"></div>
@@ -1910,8 +1898,6 @@
 
       <button type="button" class="s-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--fg-m)" onclick="closeAIAssistant()">‹ ปิดหน้าต่าง</button>
       <div style="text-align:center;margin-top:10px">
-        <a href="javascript:void(0)" style="font-size:.7rem;color:var(--fg-m);text-decoration:underline" onclick="openAIApiKeyModal(function(){})">⚙️ ตั้งค่า/เปลี่ยน API Key</a>
-        &nbsp;·&nbsp;
         <a href="javascript:void(0)" style="font-size:.7rem;color:var(--fg-m);text-decoration:underline" onclick="openAIPersonaModal()">🎭 ปรับพฤติกรรม</a>
       </div>
     </div>
@@ -1999,18 +1985,19 @@ var firebaseConfig = {
   messagingSenderId: "961285778608",
   appId: "1:961285778608:web:4dfec134f137ef0eeb1f75"
 };
-var _fb = { app:null, db:null, ready:false, authReady:null };
+var _fb = { app:null, db:null, functions:null, ready:false, authReady:null };
 function initFirebase(){
   if (_fb.ready) return Promise.resolve(true);
   if (_fb.authReady) return _fb.authReady;
   _fb.authReady = new Promise(function(resolve){
     try{
       if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'YOUR_API_KEY') {
-        console.warn('Firebase ยังไม่ได้ตั้งค่า — ฟีเจอร์รหัสครอบครัว/GPS ข้ามเครื่องจะใช้งานไม่ได้');
+        console.warn('Firebase ยังไม่ได้ตั้งค่า — ฟีเจอร์รหัสครอบครัว/GPS ข้ามเครื่อง/ผู้ช่วย AI จะใช้งานไม่ได้');
         resolve(false); return;
       }
       _fb.app = firebase.initializeApp(firebaseConfig);
       _fb.db = firebase.firestore();
+      _fb.functions = firebase.functions();
       firebase.auth().signInAnonymously().then(function(){
         _fb.ready = true; resolve(true);
       }).catch(function(err){ console.warn('Firebase auth error', err); resolve(false); });
@@ -5562,41 +5549,6 @@ function getAIWalletContextText(){
   }
 }
 
-function aiApiKeyKey(){ return 'pp_ai_apikey'; }
-function getAIApiKey(){ return load(aiApiKeyKey(),''); }
-
-/** คืน Promise<string> ของ API key — ถ้ามีอยู่แล้วคืนทันที ถ้าไม่มีจะเปิด modal ให้กรอก
- * ใช้ modal ของแอปเอง (ไม่ใช่ prompt()) เพราะเบราว์เซอร์ในแอปกระเป๋าเงินบางตัวบล็อก prompt/alert/confirm ไปเลย */
-function ensureAIApiKeyAsync(){
-  var key=getAIApiKey();
-  if(key) return Promise.resolve(key);
-  return new Promise(function(resolve){
-    openAIApiKeyModal(function(enteredKey){ resolve(enteredKey||''); });
-  });
-}
-
-var _aiApiKeyResolveCb=null;
-function openAIApiKeyModal(onResolve){
-  _aiApiKeyResolveCb=onResolve;
-  var input=document.getElementById('ai-apikey-input');
-  if(input) input.value=getAIApiKey()||'';
-  document.getElementById('modal-ai-apikey').classList.add('open');
-  setTimeout(function(){ if(input) input.focus(); }, 250);
-}
-function closeAIApiKeyModalOutside(e){ if(e.target===e.currentTarget) closeAIApiKeyModal(getAIApiKey()); }
-function closeAIApiKeyModal(resultKey){
-  document.getElementById('modal-ai-apikey').classList.remove('open');
-  var cb=_aiApiKeyResolveCb; _aiApiKeyResolveCb=null;
-  if(cb) cb(resultKey);
-}
-function confirmAIApiKeyModal(){
-  var input=document.getElementById('ai-apikey-input');
-  var key=(input&&input.value||'').trim();
-  if(key) save(aiApiKeyKey(),key);
-  closeAIApiKeyModal(key);
-  if(key) toast('success','บันทึก API Key แล้ว');
-}
-
 // --- จดจำใบหน้า (face-api.js) ---
 var FACE_MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.3/model';
 var _faceModelsLoaded=false;
@@ -6221,8 +6173,8 @@ function pickThaiVoice(){
 window.onNativeTTSDone = null;
 
 function callClaudeAI(userText,imageBase64,recognizedFace,locationWeatherText){
-  return ensureAIApiKeyAsync().then(function(apiKey){
-    if(!apiKey) throw new Error('ยังไม่ได้ตั้งค่า API Key');
+  return initFirebase().then(function(ready){
+    if(!ready) throw new Error('เชื่อมต่อระบบไม่สำเร็จ (Firebase) กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่');
 
     var messages=_aiHistory.map(function(m){ return {role:m.role, content:m.text}; });
     var currentContent=[];
@@ -6278,46 +6230,34 @@ function callClaudeAI(userText,imageBase64,recognizedFace,locationWeatherText){
       + 'ให้เติมบรรทัดสุดท้ายของคำตอบเป็นรูปแบบ [MEMORY]: ข้อมูล1; ข้อมูล2 (คั่นด้วยเซมิโคลอน) '
       + 'ถ้าไม่มีอะไรใหม่ให้จำ ห้ามใส่บรรทัด [MEMORY] เลย — บรรทัดนี้จะไม่ถูกพูดออกเสียงให้ผู้ใช้ฟัง';
 
-    return fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'content-type':'application/json',
-        'x-api-key':apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({
-        model:'claude-sonnet-5',
-        max_tokens:1024,
-        system:systemPrompt,
-        messages:messages
+    // เรียกเกตเวย์กลาง (Firebase Cloud Function) แทนการเรียก Anthropic ตรงจากเครื่อง — ไม่มี API Key ในแอปเลย
+    var aiGatewayCall = _fb.functions.httpsCallable('aiGateway');
+    return aiGatewayCall({ messages: messages, system: systemPrompt, maxTokens: 1024 })
+      .then(function(result){
+        var data = result.data;
+        var content = data.content || [];
+        var out = '';
+        content.forEach(function(block){ if(block.type==='text') out += block.text; });
+        return out.trim();
       })
-    }).then(function(res){
-      if(!res.ok){ return res.text().then(function(t){ throw new Error(friendlyAIErrorMessage(res.status,t)); }); }
-      return res.json();
-    }).then(function(data){
-      var content=data.content||[];
-      var out='';
-      content.forEach(function(block){ if(block.type==='text') out+=block.text; });
-      return out.trim();
-    });
+      .catch(function(err){
+        throw new Error(friendlyAIErrorMessage(err));
+      });
   });
 }
-/** แปลง error response ดิบจาก Anthropic API ให้เป็นข้อความอ่านง่าย แทนที่จะโชว์ JSON ดิบยาวๆ ให้ผู้ใช้เห็น */
-function friendlyAIErrorMessage(status,rawText){
-  var apiMsg='';
-  var errType='';
-  try{
-    var parsed=JSON.parse(rawText);
-    errType=(parsed.error&&parsed.error.type)||'';
-    apiMsg=(parsed.error&&parsed.error.message)||'';
-  }catch(e){ /* parse ไม่ได้ก็ใช้ rawText ตรงๆ ด้านล่าง */ }
-  if(status===401 || errType==='authentication_error') return 'API Key ไม่ถูกต้องหรือหมดอายุ — ลองตั้งค่า API Key ใหม่ที่ปุ่ม ⚙️ ด้านล่าง';
-  if(status===400 && /credit balance is too low/i.test(apiMsg)) return 'เครดิตในบัญชี Anthropic API หมด — กรุณาเติมเครดิตที่ console.anthropic.com > Plans & Billing';
-  if(status===429 || errType==='rate_limit_error') return 'ใช้งานถี่เกินไป (rate limit) กรุณารอสักครู่แล้วลองใหม่';
-  if(status===529 || errType==='overloaded_error') return 'ระบบ Anthropic กำลังโหลดสูง กรุณาลองใหม่อีกครั้งในอีกสักครู่';
-  if(apiMsg) return 'API error '+status+': '+apiMsg;
-  return 'API error '+status+' — ลองใหม่อีกครั้ง';
+/** แปลง error จาก Firebase Callable Function (เกตเวย์กลาง) ให้เป็นข้อความอ่านง่าย แทนที่จะโชว์ error ดิบให้ผู้ใช้เห็น */
+function friendlyAIErrorMessage(err){
+  var code = (err && err.code) || '';
+  var msg = (err && err.message) || '';
+  if(code==='unauthenticated') return 'ยังไม่ได้ยืนยันตัวตน — ลองปิดแอปแล้วเปิดใหม่';
+  if(code==='resource-exhausted') return msg || 'วันนี้ใช้ผู้ช่วย AI ครบโควต้าแล้ว กรุณาลองใหม่พรุ่งนี้';
+  if(/credit balance is too low/i.test(msg)) return 'เครดิตในบัญชีเกตเวย์หมด — กรุณาติดต่อผู้ดูแลระบบให้เติมเครดิตที่ console.anthropic.com';
+  if(/rate_limit_error/i.test(msg) || code==='resource-exhausted') return 'ใช้งานถี่เกินไป (rate limit) กรุณารอสักครู่แล้วลองใหม่';
+  if(/overloaded_error/i.test(msg)) return 'ระบบ AI กำลังโหลดสูง กรุณาลองใหม่อีกครั้งในอีกสักครู่';
+  if(code==='unavailable') return 'เชื่อมต่อเกตเวย์ไม่สำเร็จ กรุณาเช็คอินเทอร์เน็ตแล้วลองใหม่';
+  if(code==='failed-precondition') return 'ระบบยังตั้งค่าไม่สมบูรณ์ (ผู้ดูแลระบบต้องตั้งค่า API Key ที่เกตเวย์)';
+  if(msg) return msg;
+  return 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ — ลองใหม่อีกครั้ง';
 }
 
 // ============================================================
